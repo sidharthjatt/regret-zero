@@ -1,0 +1,24 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyc
+
+# --- Virtual environment ---
+venv/
+.venv/
+env/
+
+# --- OS junk ---
+.DS_Store
+
+# --- Data files (keep large/raw data out of git) ---
+data/*.csv
+data/*.xlsx
+# ...but allow a small committed sample
+!data/sample.csv
+
+# --- Project outputs ---
+outputs/*
+!outputs/.gitkeep
+reports/*
+!reports/.gitkeep
