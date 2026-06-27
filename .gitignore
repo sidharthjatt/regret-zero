@@ -17,8 +17,8 @@ data/*.xlsx
 # ...but allow a small committed sample
 !data/sample.csv
 
-# --- Project outputs ---
+# --- Generated outputs (regenerable artifacts: plots, forecast CSVs) ---
 outputs/*
 !outputs/.gitkeep
-reports/*
-!reports/.gitkeep
+
+# NOTE: reports/ holds hand-written decision notes — track them (do NOT ignore).
