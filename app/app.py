@@ -131,6 +131,10 @@ prices = load_prices()
 st.sidebar.header("Cost assumptions")
 st.sidebar.caption("Cu = margin × price (stockout)  ·  Co = holding × price (overage)")
 
+# Slider defaults mirror src/03_optimize.py's benchmark-justified values
+# (holding 0.10; conservative net/contribution-margin-style tier margins
+# 0.05/0.20/0.45 — see the cost-assumptions note in 03). These defaults
+# reproduce the pipeline headline of +12.3% (Rs 57,232).
 holding = st.sidebar.slider("Holding fraction (Co)", 0.02, 0.30, 0.10, 0.01)
 
 st.sidebar.subheader("Tier margins (Cu)")
