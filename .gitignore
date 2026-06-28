@@ -16,9 +16,13 @@ data/*.csv
 data/*.xlsx
 # ...but allow a small committed sample
 !data/sample.csv
+# ...and prices.csv (76 KB) — needed by the deployed Streamlit dashboard
+!data/prices.csv
 
 # --- Generated outputs (regenerable artifacts: plots, forecast CSVs) ---
 outputs/*
 !outputs/.gitkeep
+# ...except forecasts.csv (4 MB) — needed by the deployed Streamlit dashboard
+!outputs/forecasts.csv
 
 # NOTE: reports/ holds hand-written decision notes — track them (do NOT ignore).
