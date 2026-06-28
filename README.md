@@ -42,6 +42,8 @@ The interactive [decision cockpit](https://regret-zero.streamlit.app) puts the c
 
 Every price tier comes out positive: low +6.8%, mid +8.6%, premium +14.8%.
 
+A fuller writeup of the results, business impact, and limitations is in [reports/findings.md](reports/findings.md).
+
 ## Repository layout
 
 ```
