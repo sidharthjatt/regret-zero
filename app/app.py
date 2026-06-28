@@ -1,11 +1,11 @@
 """
 app.py — RegretZero "decision cockpit" (Streamlit dashboard)
 
-Interactive front-end for the decision-regret result. The cost math here is a
-FAITHFUL re-implementation of src/03_optimize.py — same tiering, critical
-ratio, nearest-quantile snap, and asymmetric cost — except the cost
-assumptions (holding fraction + per-tier margins) are driven by sliders so you
-can watch the savings move in real time.
+Interactive front-end for the decision-regret result. The cost math is imported
+from src/optimizer.py — the SAME module the batch pipeline uses — so the
+dashboard and the pipeline can never drift. Only the cost assumptions (holding
+fraction + per-tier margins) are driven by sliders so you can watch the savings
+move in real time.
 
 With the default sliders (holding=0.10, margins 0.05/0.20/0.45) this reproduces
 the pipeline's proven result: decision-aware beats accuracy-first by ~12.3%.
@@ -14,6 +14,7 @@ Run from the project root:
     streamlit run app/app.py
 """
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,17 +22,25 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+# Import the shared cost model (src/optimizer.py) — single source of truth with
+# the batch pipeline. app/ is a different folder, so put src/ on sys.path first.
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+from optimizer import (  # noqa: E402  (import after the sys.path tweak)
+    HOLDING_FRACTION,
+    MARGIN_BY_TIER,
+    TIER_LABELS,
+    map_cr_to_quantile,
+    score,
+)
+
 # --------------------------------------------------------------------------
-# Constants mirrored EXACTLY from src/03_optimize.py (keep in sync).
+# Paths + app-only display constants.
 # --------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FORECAST_PATH = PROJECT_ROOT / "outputs" / "forecasts.csv"
 PRICES_PATH = PROJECT_ROOT / "data" / "prices.csv"
-
-PRICE_TIER_QUANTILES = (1 / 3, 2 / 3)   # tier boundaries on per-product price
-TIER_LABELS = ["low", "mid", "premium"]
-AVAILABLE_QUANTILES = [0.333, 0.5, 0.667, 0.818, 0.9]  # must match forecast cols
-ROUND_ORDERS = True
 
 TIER_COLORS = {"low": "#4C72B0", "mid": "#DD8452", "premium": "#55A868"}
 
@@ -53,63 +62,13 @@ def load_prices() -> pd.DataFrame:
     return pd.read_csv(PRICES_PATH, dtype={"stock_code": "string"})
 
 
-def map_cr_to_quantile(cr: float, available=AVAILABLE_QUANTILES) -> float:
-    """Snap a critical ratio to the NEAREST available quantile (mirrors 03)."""
-    return min(available, key=lambda q: abs(q - cr))
-
-
 def compute(forecasts: pd.DataFrame, prices: pd.DataFrame,
             holding: float, margins: dict) -> pd.DataFrame:
-    """Re-implement 03_optimize.py's per-row economics + costs.
-
-    `margins` maps tier -> margin fraction (from the sidebar sliders);
-    `holding` is the holding fraction. Tier boundaries come from the
-    per-PRODUCT price quantiles, exactly as in the pipeline.
-    """
-    econ = prices.copy()
-
-    # Tier each product by its unit price (same quantile thresholds as 03).
-    q_lo, q_hi = econ["unit_price"].quantile(PRICE_TIER_QUANTILES)
-    econ["tier"] = np.where(
-        econ["unit_price"] <= q_lo, TIER_LABELS[0],
-        np.where(econ["unit_price"] <= q_hi, TIER_LABELS[1], TIER_LABELS[2]),
-    )
-    econ["margin"] = econ["tier"].map(margins)
-
-    # Asymmetric costs and critical ratio (price cancels in CR, as in 03).
-    econ["cu"] = econ["margin"] * econ["unit_price"]
-    econ["co"] = holding * econ["unit_price"]
-    econ["cr"] = econ["margin"] / (econ["margin"] + holding)
-    econ["chosen_q"] = econ["cr"].apply(map_cr_to_quantile)
-
-    # Attach economics to each product-week.
-    m = forecasts.merge(econ, on="stock_code", how="left")
-
-    # Decision-aware order = the forecast column matching each row's chosen
-    # quantile; accuracy-first = always P50. (Vectorized per quantile.)
-    quantile_cols = {q: f"p{round(q * 100)}" for q in AVAILABLE_QUANTILES}
-    m["decision_order"] = np.nan
-    for q, col in quantile_cols.items():
-        mask = m["chosen_q"] == q
-        m.loc[mask, "decision_order"] = m.loc[mask, col]
-    m["accuracy_order"] = m["p50"]
-
-    # Orders can't be negative or (optionally) fractional — applied to BOTH
-    # strategies identically so the comparison stays fair.
-    for col in ["accuracy_order", "decision_order"]:
-        m[col] = np.clip(m[col], 0.0, None)
-        if ROUND_ORDERS:
-            m[col] = np.rint(m[col])
-
-    # Asymmetric newsvendor cost: Cu*shortage + Co*excess.
-    actual = m["actual"].to_numpy(dtype=float)
-    for strat, order_col in [("accuracy", "accuracy_order"), ("decision", "decision_order")]:
-        order = m[order_col].to_numpy()
-        shortage = np.maximum(actual - order, 0.0)
-        excess = np.maximum(order - actual, 0.0)
-        m[f"cost_{strat}"] = m["cu"].to_numpy() * shortage + m["co"].to_numpy() * excess
-
-    return m
+    """Per-product-week economics + realized costs, via the shared scorer
+    (src/optimizer.py). Identical math to the batch pipeline; only the cost
+    assumptions (holding + tier margins) are slider-driven here."""
+    df, _ = score(forecasts, prices, holding=holding, margins=margins)
+    return df
 
 
 # Holding-fraction grid swept by the Sensitivity section.
@@ -156,17 +115,15 @@ prices = load_prices()
 st.sidebar.header("Cost assumptions")
 st.sidebar.caption("Cu = margin × price (stockout)  ·  Co = holding × price (overage)")
 
-# Slider defaults mirror src/03_optimize.py's benchmark-justified values
-# (holding 0.10; conservative net/contribution-margin-style tier margins
-# 0.05/0.20/0.45 — see the cost-assumptions note in 03). These defaults
-# reproduce the pipeline headline of +12.3% (Rs 57,232).
-holding = st.sidebar.slider("Holding fraction (Co)", 0.02, 0.30, 0.10, 0.01)
+# Slider defaults come straight from the shared cost model's canonical values
+# (optimizer.HOLDING_FRACTION and MARGIN_BY_TIER), so the dashboard's default
+# load always matches the pipeline (+12.3%, Rs 57,232).
+holding = st.sidebar.slider("Holding fraction (Co)", 0.02, 0.30, HOLDING_FRACTION, 0.01)
 
 st.sidebar.subheader("Tier margins (Cu)")
 margins = {
-    "low": st.sidebar.slider("low margin", 0.01, 0.60, 0.05, 0.01),
-    "mid": st.sidebar.slider("mid margin", 0.01, 0.60, 0.20, 0.01),
-    "premium": st.sidebar.slider("premium margin", 0.01, 0.60, 0.45, 0.01),
+    t: st.sidebar.slider(f"{t} margin", 0.01, 0.60, MARGIN_BY_TIER[t], 0.01)
+    for t in TIER_LABELS
 }
 
 # Live critical ratio + snapped quantile per tier.

@@ -57,6 +57,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Shared decision logic — single source of truth (src/optimizer.py). Importable
+# here because running `python src/03_optimize.py` puts src/ on sys.path.
+from optimizer import HOLDING_FRACTION, TIER_LABELS, score
+
 # --------------------------------------------------------------------------
 # Paths (resolved from project root, consistent with the other scripts).
 # --------------------------------------------------------------------------
@@ -67,69 +71,12 @@ RAW_PATH = PROJECT_ROOT / "data" / "online_retail_II.csv"  # fallback only
 REGRET_PATH = PROJECT_ROOT / "outputs" / "regret_by_product.csv"
 
 # --------------------------------------------------------------------------
-# Cost assumptions — the dataset has NO cost data, so these are transparent,
-# configurable proxies. They are grounded in published retail gross-margin
-# benchmarks (2025-26) for a business like this one (a UK online gift retailer):
-#
-#     grocery / commodity        ~25-30%
-#     general merchandise        ~35-45%
-#     specialty / luxury / gift  ~55-65%
-#     e-commerce (blended)       ~30-50%
-#   Net margins are far thinner (grocery ~1-3%, specialty ~10%+).
-#
-# We tier products by unit price (a proxy for category) and set the underage
-# (stockout) cost Cu = margin[tier] * price = the profit forgone per lost sale.
-# We deliberately use CONSERVATIVE, net/contribution-margin-style fractions that
-# sit BELOW the gross benchmarks above — NOT the headline gross margins — for
-# three auditable reasons:
-#   (1) the overage cost Co also scales with price (Co = HOLDING * price), and a
-#       per-week HOLDING of 10% already absorbs real markdown/obsolescence risk,
-#       so Cu should reflect *contribution* lost, not gross margin;
-#   (2) a stockout is not always a fully lost sale (substitution / backorder),
-#       so gross margin overstates the true per-unit regret;
-#   (3) sub-gross fractions keep the critical ratios spread ACROSS tiers
-#       (0.333 / 0.667 / 0.818) so the optimizer genuinely orders a different
-#       quantile per tier. Plugging in full gross margins (0.27/0.40/0.60) would
-#       compress every tier to CR>0.7 and erase the per-tier decision story.
-#
-#   Cu = margin[tier] * price        Co = HOLDING_FRACTION * price
-#   CR = margin / (margin + HOLDING_FRACTION)  -> nearest trained quantile:
-#
-#   tier     benchmark category            margin   CR      orders
-#   low      commodity (grocery net ~2-5%)  0.05    0.333    P33
-#   mid      general merchandise            0.20    0.667    P67
-#   premium  specialty / gift / luxury      0.45    0.818    P82
-#
-# Values are unchanged from the proven run -> total savings stay +12.3%
-# (Rs 57,232). Edit them (or HOLDING_FRACTION) to explore other regimes.
+# Cost model (tier margins, holding fraction, critical-ratio -> quantile,
+# asymmetric cost) lives in src/optimizer.py — the single source of truth
+# shared with the dashboard. See that module's docstring for the full
+# benchmark justification of the cost assumptions. This file owns only the
+# I/O and the reporting; the math is imported.
 # --------------------------------------------------------------------------
-HOLDING_FRACTION = 0.10  # weekly holding/overage cost as a fraction of unit price
-
-# Tier boundaries as quantiles of the per-product unit-price distribution.
-# (1/3, 2/3) -> three roughly equal-sized tiers.
-PRICE_TIER_QUANTILES = (1 / 3, 2 / 3)
-TIER_LABELS = ["low", "mid", "premium"]
-# Conservative net/contribution-margin-style underage fractions per tier; sit
-# below the gross-margin benchmarks above (see note). Ordering matches the
-# benchmark ordering: commodity < general merchandise < specialty/gift.
-MARGIN_BY_TIER = {"low": 0.05, "mid": 0.20, "premium": 0.45}
-
-# Quantiles available from the forecaster (must exist as columns in
-# forecasts.csv, e.g. p33, p50, p67, p82, p90). Kept in sync with 02_forecast.
-AVAILABLE_QUANTILES = [0.333, 0.5, 0.667, 0.818, 0.9]
-
-ROUND_ORDERS = True  # round order quantities to whole units (can't order 0.5)
-
-
-def map_cr_to_quantile(cr: float, available=AVAILABLE_QUANTILES) -> float:
-    """Snap a critical ratio to the NEAREST trained quantile.
-
-    The newsvendor optimum is F^{-1}(CR); with a finite set of trained
-    quantiles we pick the closest one. This is general — add more quantiles to
-    AVAILABLE_QUANTILES (and to 02_forecast) and the match gets finer
-    automatically.
-    """
-    return min(available, key=lambda q: abs(q - cr))
 
 
 def load_forecasts() -> pd.DataFrame:
@@ -176,78 +123,6 @@ def load_unit_price() -> pd.Series:
     return price
 
 
-def build_economics(price: pd.Series) -> pd.DataFrame:
-    """Build per-product economics: price tier, margin, Cu, Co, CR, quantile.
-
-    Tiering is done on the per-PRODUCT price distribution (one price per
-    product), so it isn't skewed by how many weeks each product has.
-    """
-    econ = price.to_frame().reset_index()  # columns: stock_code, unit_price
-
-    # Robust tiering via quantile thresholds (handles duplicate prices, unlike
-    # qcut which can choke on tied bin edges).
-    q_lo, q_hi = econ["unit_price"].quantile(PRICE_TIER_QUANTILES)
-    econ["tier"] = np.where(
-        econ["unit_price"] <= q_lo, TIER_LABELS[0],
-        np.where(econ["unit_price"] <= q_hi, TIER_LABELS[1], TIER_LABELS[2]),
-    )
-    econ["margin"] = econ["tier"].map(MARGIN_BY_TIER)
-
-    econ["cu"] = econ["margin"] * econ["unit_price"]
-    econ["co"] = HOLDING_FRACTION * econ["unit_price"]
-    econ["cr"] = econ["margin"] / (econ["margin"] + HOLDING_FRACTION)
-    econ["chosen_q"] = econ["cr"].apply(map_cr_to_quantile)
-
-    # Stash thresholds for the summary printout.
-    econ.attrs["q_lo"] = float(q_lo)
-    econ.attrs["q_hi"] = float(q_hi)
-    return econ
-
-
-def realized_cost(actual: np.ndarray, order: np.ndarray,
-                  cu: np.ndarray, co: np.ndarray) -> np.ndarray:
-    """Asymmetric newsvendor cost per product-week: Cu*shortage + Co*excess."""
-    shortage = np.maximum(actual - order, 0.0)
-    excess = np.maximum(order - actual, 0.0)
-    return cu * shortage + co * excess
-
-
-def prepare_orders(df: pd.DataFrame, econ: pd.DataFrame) -> pd.DataFrame:
-    """Attach economics and both strategies' order quantities to each row."""
-    df = df.merge(econ, on="stock_code", how="left")
-
-    n_missing = int(df["unit_price"].isna().sum())
-    if n_missing:
-        # Any product without a price gets median economics so the model stays
-        # defined (shouldn't happen when prices.csv comes from 01_data_prep).
-        med_price = econ["unit_price"].median()
-        df["unit_price"] = df["unit_price"].fillna(med_price)
-        df["tier"] = df["tier"].fillna(TIER_LABELS[1])
-        df["margin"] = df["margin"].fillna(MARGIN_BY_TIER[TIER_LABELS[1]])
-        df["co"] = df["co"].fillna(HOLDING_FRACTION * med_price)
-        df["cu"] = df["cu"].fillna(MARGIN_BY_TIER[TIER_LABELS[1]] * med_price)
-        df["cr"] = df["cr"].fillna(
-            MARGIN_BY_TIER[TIER_LABELS[1]] / (MARGIN_BY_TIER[TIER_LABELS[1]] + HOLDING_FRACTION)
-        )
-        df["chosen_q"] = df["chosen_q"].fillna(map_cr_to_quantile(df["cr"].iloc[0]))
-        print(f"WARNING: {n_missing:,} rows had no price; filled with median economics")
-
-    # Decision-aware order = the forecast column matching each row's chosen
-    # quantile; accuracy-first = always P50.
-    quantile_cols = {q: f"p{round(q * 100)}" for q in AVAILABLE_QUANTILES}
-    df["decision_order"] = df.apply(
-        lambda r: r[quantile_cols[r["chosen_q"]]], axis=1
-    )
-    df["accuracy_order"] = df["p50"]
-
-    for col in ["accuracy_order", "decision_order"]:
-        df[col] = np.clip(df[col], 0.0, None)
-        if ROUND_ORDERS:
-            df[col] = np.rint(df[col])
-
-    return df
-
-
 def main() -> None:
     if not FORECAST_PATH.exists():
         raise FileNotFoundError(
@@ -258,16 +133,14 @@ def main() -> None:
     df = load_forecasts()
     print(f"loaded {len(df):,} test product-weeks, {df['stock_code'].nunique():,} products")
 
+    # Per-product price (Series) -> DataFrame [stock_code, unit_price] for the
+    # shared scorer. score() returns the per-product-week table with realized
+    # costs, plus the per-product economics (used in the tier summary below).
     price = load_unit_price()
-    econ = build_economics(price)
-    df = prepare_orders(df, econ)
+    df, econ = score(df, price.reset_index())
 
-    # --- Realized cost (regret) for each strategy ---
+    # Actual-demand vector (for the RMSE metric below).
     actual = df["actual"].to_numpy(dtype=float)
-    cu = df["cu"].to_numpy()
-    co = df["co"].to_numpy()
-    df["cost_accuracy"] = realized_cost(actual, df["accuracy_order"].to_numpy(), cu, co)
-    df["cost_decision"] = realized_cost(actual, df["decision_order"].to_numpy(), cu, co)
 
     total_acc = df["cost_accuracy"].sum()
     total_dec = df["cost_decision"].sum()
