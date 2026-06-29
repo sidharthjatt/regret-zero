@@ -32,7 +32,7 @@ The premium tier saves the most, which is exactly what the theory predicts: high
 
 The test window is 12 weeks. Extrapolated across a full year on the same product range and demand pattern, the same decision rule would avoid roughly **₹2.48 lakh** in regret per year — purely from changing *how much to order*, with no change to the forecasting model, no new data, and no extra cost. For a single mid-size online retailer this is a direct, recurring saving; for a larger operation it scales with the catalogue.
 
-The number itself is illustrative — it depends on the cost assumptions, which are grounded in real retail-margin benchmarks but not measured from this dataset. The durable finding is the *direction and the mechanism*: ordering at the critical-ratio quantile beats ordering at the median, and the gap is largest exactly where it should be. The interactive dashboard lets anyone change the cost assumptions and confirm the conclusion holds across a wide range.
+The number itself is illustrative — it depends on the cost assumptions, which are grounded in real retail-margin benchmarks but not measured from this dataset. The durable finding is the *direction and the mechanism*: ordering at the critical-ratio quantile beats ordering at the median, and the gap is largest exactly where it should be. The interactive dashboard lets anyone change the cost assumptions and confirm the conclusion holds across a wide range. A sensitivity sweep over the holding cost makes this concrete: decision-aware ordering stays ahead for holding fractions up to about 0.27, and only turns slightly negative beyond that — where over-stocking finally outweighs the avoided stockouts. So the result is robust across the practical range, not a single lucky setting, and the point where it stops working is known.
 
 ## Why the result is trustworthy
 
@@ -41,6 +41,7 @@ A good-looking number is worthless if the pipeline is leaking future information
 - **No leakage.** Lag and rolling features are strictly backward-looking and computed per product; the train/validation/test split is purely chronological with no overlap. This was verified by independently reconstructing the features.
 - **Reproducible.** A fresh end-to-end run reproduces the same outputs byte-for-byte.
 - **Verified three ways.** The headline was re-derived independently and matched the pipeline to the rupee.
+- **One source of truth.** The newsvendor decision logic lives in a single shared module (`src/optimizer.py`) that both the batch pipeline and the live dashboard import, so the two can never drift apart — and the refactor that introduced it was confirmed byte-identical (the result file's checksum was unchanged).
 - **Calibrated where it counts.** The decision-driving upper quantiles (P82, P90) are well-calibrated — P90 coverage is 91.8% against a 90% target.
 
 ## Honest limitations
