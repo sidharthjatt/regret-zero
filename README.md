@@ -30,7 +30,7 @@ The pipeline runs in four stages, each building on the last.
 
 **4. Decision-regret benchmark** — Compares two strategies on held-out weeks: an accuracy-first baseline that orders the median forecast, and the decision-aware approach that orders the critical-ratio quantile. The realized cost is the asymmetric newsvendor cost, summed in rupees. Decision-aware wins by 12.3%.
 
-The interactive [decision cockpit](https://regret-zero.streamlit.app) puts the cost assumptions on sliders, so you can change the holding cost or the tier margins and watch the optimal orders and the savings recompute live.
+The interactive [decision cockpit](https://regret-zero.streamlit.app) puts the cost assumptions on sliders, so you can change the holding cost or the tier margins and watch the optimal orders and the savings recompute live. It also sweeps the holding cost to show the result holds across a range of settings rather than a single lucky point, and lets you drill into any single product to see how the engine reasons about it.
 
 ## Result
 
@@ -53,7 +53,8 @@ regret-zero/
 │   ├── 01_data_prep.py     # clean + aggregate to weekly demand
 │   ├── 02_demand_eda.py    # distribution analysis
 │   ├── 02_forecast.py      # LightGBM quantile forecasting
-│   └── 03_optimize.py      # newsvendor optimizer + decision-regret
+│   ├── optimizer.py        # shared newsvendor logic (single source of truth)
+│   └── 03_optimize.py      # runs the optimizer, measures decision-regret
 ├── reports/                # decision notes (outliers, calibration)
 ├── data/sample.csv         # small runnable sample
 └── requirements.txt
@@ -84,7 +85,7 @@ streamlit run app/app.py
 
 ## A note on the cost assumptions
 
-The dataset has no cost data, so the stockout and holding costs are transparent, configurable assumptions set at the top of `src/03_optimize.py`. The contribution here is the framework and the relative result, not the exact rupee figure — decision-aware ordering wins across a wide range of cost settings, which the live dashboard lets you verify for yourself. Two modelling decisions are written up in `reports/`: why extreme demand weeks are kept rather than capped, and why the lower quantiles are deliberately left as-is given the intermittent-demand data.
+The dataset has no cost data, so the stockout and holding costs are transparent, configurable assumptions set at the top of `src/optimizer.py`. The contribution here is the framework and the relative result, not the exact rupee figure — decision-aware ordering wins across a wide range of cost settings, which the live dashboard lets you verify for yourself. Two modelling decisions are written up in `reports/`: why extreme demand weeks are kept rather than capped, and why the lower quantiles are deliberately left as-is given the intermittent-demand data.
 
 ## License
 
