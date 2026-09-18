@@ -2,7 +2,8 @@
 
 **Date:** 2026-06-27
 **Status:** Decided (pending mentor review)
-**Scope:** `data/demand.csv` (product × week demand, 183,543 rows, 3,219 products)
+**Scope:** `data/demand.csv` (product × week demand, 183,459 rows, 3,218 products)
+**Updated:** 2026-09-18 — statistics refreshed after the cancellation fix (see Follow-up)
 
 ## Context
 
@@ -11,11 +12,11 @@ The weekly-demand distribution is extremely right-skewed:
 | Statistic | Value |
 |---|---|
 | Median | 15 units |
-| Mean | 58.5 units (mean / median = 3.9×) |
-| Skewness | ≈ 158 |
-| p99 | 619 |
-| p99.9 | 1,879 |
-| Max | 74,215 |
+| Mean | 57.8 units (mean / median = 3.85×) |
+| Skewness | ≈ 21 (20.8) |
+| p99 | 613 |
+| p99.9 | 1,858 |
+| Max | 12,786 |
 
 (See `outputs/weekly_demand_distribution.png` and `src/02_demand_eda.py`.)
 
@@ -35,15 +36,28 @@ weeks (likely wholesale/bulk orders).
   observations, not their magnitude. A few enormous weeks move a target
   quantile far less than they would move a mean.
 - This is precisely the opposite of **mean-based safety stock** (mean ± k·σ),
-  where σ = 245 on a median of 15 is dominated by the tail and would produce
+  where σ = 172 on a median of 15 is dominated by the tail and would produce
   absurd stocking levels. Avoiding that fragility is the reason we chose the
   quantile approach in the first place.
 - The extreme weeks are plausibly real demand (bulk/wholesale orders).
   Discarding them would bias high-quantile forecasts (P90/P95/P99) downward —
   exactly the quantiles that matter most for avoiding stockouts.
 
-## Follow-up (not blocking)
+## Follow-up — resolved 2026-09-18
 
-- Spot-check a handful of the largest weeks to confirm they are genuine
+- ~~Spot-check a handful of the largest weeks to confirm they are genuine
   orders rather than data-entry artifacts. If any are clearly errors, handle
-  them as data-quality fixes — separately from this modelling decision.
+  them as data-quality fixes — separately from this modelling decision.~~
+
+  **Resolved (2026-09-18).** The largest week, a 74,215-unit order of
+  StockCode 23166 (invoice 541431), was reversed 16 minutes later by
+  cancellation C541433 from the same customer. Searching the raw data for
+  order/cancellation pairs (same Customer ID, StockCode and absolute
+  Quantity, cancellation after the order) found 6,476 pairs. The 1,395 pairs
+  reversed within 24 hours are now removed in `src/01_data_prep.py`
+  (`MAX_CANCEL_LAG_HOURS = 24`). Later cancellations are kept, since they
+  may be returns of stock that did ship. This was handled as a data-quality
+  fix, as planned: skewness fell from ≈ 158 to ≈ 21 and the max from 74,215
+  to 12,786, and the table above shows the post-fix statistics. The decision
+  above stands. The distribution is still heavily right-skewed, and the
+  remaining large weeks are kept, not winsorized.

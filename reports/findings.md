@@ -8,41 +8,53 @@ RegretZero tests a simple but important claim: if you order at the cost-optimal 
 
 ## The headline result
 
-On a held-out test set of 12 weeks across 3,219 products, the two ordering strategies cost:
+On a held-out test set of 12 weeks across 3,218 products, the two ordering strategies cost:
 
 | Strategy | Total cost (12 weeks) |
 |---|---|
-| Accuracy-first — order the median (P50) forecast | £467,154 |
-| Decision-aware — order the critical-ratio quantile | £409,921 |
-| **Savings** | **£57,232 (12.3%)** |
+| Accuracy-first — order the median (P50) forecast | £456,736 |
+| Decision-aware — order the critical-ratio quantile | £402,105 |
+| **Savings** | **£54,631 (12.0%)** |
 
-The decision-aware strategy was cheaper on 1,690 of 3,219 products, worse on 991, and tied on 538. Crucially, it wins on the products that matter most — the high-value, high-volume items where a stockout is expensive — while conceding small amounts on low-value intermittent items where being slightly over-stocked barely costs anything.
+The decision-aware strategy was cheaper on 1,677 of 3,218 products, worse on 1,015, and tied on 526. Crucially, it wins on the products that matter most — the high-value, high-volume items where a stockout is expensive — while conceding small amounts on low-value intermittent items where being slightly over-stocked barely costs anything.
 
 Every price tier comes out ahead:
 
 | Tier | Critical ratio | Quantile ordered | Savings |
 |---|---|---|---|
-| Low (commodity) | 0.333 | P33 | +6.8% |
-| Mid (general) | 0.667 | P67 | +8.6% |
-| Premium (specialty) | 0.818 | P82 | +14.8% |
+| Low (commodity) | 0.333 | P33 | +7.1% |
+| Mid (general) | 0.667 | P67 | +7.4% |
+| Premium (specialty) | 0.818 | P82 | +14.9% |
 
 The premium tier saves the most, which is exactly what the theory predicts: high-margin products make stockouts expensive, so the optimizer stocks them more aggressively, and the savings from avoided stockouts outweigh the extra holding cost.
 
 ## What this means in business terms
 
-The test window is 12 weeks. Extrapolated across a full year (×52/12) on the same product range and demand pattern, the same decision rule would avoid **~£248,000** in regret per year — purely from changing *how much to order*, with no change to the forecasting model, no new data, and no extra cost. For a single mid-size online retailer this is a direct, recurring saving; for a larger operation it scales with the catalogue. One caveat: the test window runs September to December, the pre-Christmas peak for this retailer, so scaling it up to 52 weeks assumes the rest of the year looks like that season. It probably does not, so treat the annual figure as a rough order of magnitude.
+The test window is 12 weeks. Extrapolated across a full year (×52/12) on the same product range and demand pattern, the same decision rule would avoid **~£237,000** in regret per year — purely from changing *how much to order*, with no change to the forecasting model, no new data, and no extra cost. For a single mid-size online retailer this is a direct, recurring saving; for a larger operation it scales with the catalogue. One caveat: the test window runs September to December, the pre-Christmas peak for this retailer, so scaling it up to 52 weeks assumes the rest of the year looks like that season. It probably does not, so treat the annual figure as a rough order of magnitude.
 
-The number itself is illustrative — it depends on the cost assumptions, which are grounded in real retail-margin benchmarks but not measured from this dataset. The durable finding is the *direction and the mechanism*: ordering at the critical-ratio quantile beats ordering at the median, and the gap is largest exactly where it should be. The interactive dashboard lets anyone change the cost assumptions and confirm the conclusion holds across a wide range. A sensitivity sweep over the holding cost makes this concrete: decision-aware ordering stays ahead for holding fractions up to ~0.26 (breakeven lies between 0.26, at +0.14%, and 0.27, at −0.32%), and turns slightly negative beyond that — where over-stocking finally outweighs the avoided stockouts. The curve is not monotonic (for example, +4.6% at a holding fraction of 0.40, which is outside the dashboard's 0.02–0.30 sweep range and was computed offline with `optimizer.score`): each product snaps to the nearest trained quantile, so as the holding fraction changes, tiers jump between quantiles instead of moving smoothly. So the result is robust across the practical range, not a single lucky setting, and the point where it stops working is known.
+The number itself is illustrative — it depends on the cost assumptions, which are grounded in real retail-margin benchmarks but not measured from this dataset. The durable finding is the *direction and the mechanism*: ordering at the critical-ratio quantile beats ordering at the median, and the gap is largest exactly where it should be. The interactive dashboard lets anyone change the cost assumptions and confirm the conclusion holds across a wide range. A sensitivity sweep over the holding cost makes this concrete: decision-aware ordering stays ahead for holding fractions up to ~0.26 (breakeven lies between 0.26, at +0.38%, and 0.27, at −0.07%), and is slightly negative from 0.27 to 0.32 — where over-stocking finally outweighs the avoided stockouts. The curve is not monotonic (for example, +4.9% at a holding fraction of 0.40, which is outside the dashboard's 0.02–0.30 sweep range and was computed offline with `optimizer.score`): each product snaps to the nearest trained quantile, so as the holding fraction changes, tiers jump between quantiles instead of moving smoothly. So the result is robust across the practical range, not a single lucky setting, and the point where it stops working is known.
+
+## Data-cleaning sensitivity
+
+The raw data contains orders that were later cancelled in full: same customer, same product, same quantity, on a "C" invoice. There are 6,476 such pairs. How many of them to remove changes the headline a little:
+
+| Cleaning variant | Pairs removed | Savings |
+|---|---|---|
+| A — keep all orders | 0 | £57,232 (12.25%) |
+| **B — drop pairs cancelled within 24h (primary)** | **1,395** | **£54,631 (11.96%)** |
+| C — drop every matched pair | 6,476 | £47,953 (10.78%) |
+
+B is the primary result. An order reversed within 24 hours was never fulfilled, so it is not demand. A later cancellation may be a return of stock that did ship, so the original order is left in. Decision-aware ordering wins under all three variants.
 
 ## Why the result is trustworthy
 
-A good-looking number is worthless if the pipeline is leaking future information or isn't reproducible. Before trusting the 12.3%, the whole pipeline was audited:
+A good-looking number is worthless if the pipeline is leaking future information or isn't reproducible. Before trusting the 12.0%, the whole pipeline was audited:
 
 - **No leakage.** Lag and rolling features are strictly backward-looking and computed per product; the train/validation/test split is purely chronological with no overlap. This was verified by independently reconstructing the features.
-- **Reproducible.** A fresh end-to-end run reproduces the same outputs byte-for-byte.
+- **Reproducible.** With the pinned requirements (`requirements.txt`, verified on Python 3.11.15), a fresh end-to-end run reproduces the same outputs byte-for-byte.
 - **Verified three ways.** The headline was re-derived independently and matched the pipeline to the pound.
 - **One source of truth.** The newsvendor decision logic lives in a single shared module (`src/optimizer.py`) that both the batch pipeline and the live dashboard import, so the two can never drift apart — and the refactor that introduced it was confirmed byte-identical (the result file's checksum was unchanged).
-- **Calibrated where it counts.** The decision-driving upper quantiles (P82, P90) are well-calibrated — P90 coverage is 91.8% against a 90% target.
+- **Calibrated where it counts.** The decision-driving upper quantiles (P82, P90) are well-calibrated — P90 coverage is 91.7% against a 90% target.
 
 ## Honest limitations
 
@@ -52,4 +64,4 @@ A good-looking number is worthless if the pipeline is leaking future information
 
 ## The one-sentence takeaway
 
-Optimising for the decision beats optimising for the forecast: ordering at the critical-ratio quantile cut inventory regret by 12.3% on held-out data, with the largest gains exactly where the theory says they should be — and the result is leakage-free, reproducible, and verified.
+Optimising for the decision beats optimising for the forecast: ordering at the critical-ratio quantile cut inventory regret by 12.0% on held-out data, with the largest gains exactly where the theory says they should be — and the result is leakage-free, reproducible, and verified.

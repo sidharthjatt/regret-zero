@@ -8,7 +8,7 @@ fraction + per-tier margins) are driven by sliders so you can watch the savings
 move in real time.
 
 With the default sliders (holding=0.10, margins 0.05/0.20/0.45) this reproduces
-the pipeline's proven result: decision-aware beats accuracy-first by ~12.3%.
+the pipeline's proven result: decision-aware beats accuracy-first by ~12.0%.
 
 Run from the project root:
     streamlit run app/app.py
@@ -117,7 +117,7 @@ st.sidebar.caption("Cu = margin × price (stockout)  ·  Co = holding × price (
 
 # Slider defaults come straight from the shared cost model's canonical values
 # (optimizer.HOLDING_FRACTION and MARGIN_BY_TIER), so the dashboard's default
-# load always matches the pipeline (+12.3%, £57,232).
+# load always matches the pipeline (+12.0%, £54,631).
 holding = st.sidebar.slider("Holding fraction (Co)", 0.02, 0.30, HOLDING_FRACTION, 0.01)
 
 st.sidebar.subheader("Tier margins (Cu)")
@@ -323,5 +323,5 @@ with st.expander("Inspect a single product", expanded=False):
 st.divider()
 st.caption(
     "Math mirrors src/03_optimize.py exactly; only the cost assumptions are "
-    "slider-driven. Defaults reproduce the pipeline's +12.3% result."
+    "slider-driven. Defaults reproduce the pipeline's +12.0% result."
 )

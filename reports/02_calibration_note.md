@@ -2,7 +2,8 @@
 
 **Date:** 2026-06-27
 **Status:** Known property, not a bug — documented, intentionally not "fixed"
-**Scope:** `outputs/forecasts.csv` test-set coverage (12 weeks, 3,219 products)
+**Scope:** `outputs/forecasts.csv` test-set coverage (12 weeks, 3,218 products)
+**Updated:** 2026-09-18 — figures refreshed after the cancellation fix
 
 ## Observation
 
@@ -12,11 +13,11 @@ converges to target for the upper ones:
 
 | Quantile | Empirical coverage | Target | Gap |
 |---|---|---|---|
-| P33 | 51.8% | 33.3% | +18.5 |
-| P50 | 63.1% | 50.0% | +13.1 |
-| P67 | 75.1% | 66.7% | +8.4 |
+| P33 | 52.0% | 33.3% | +18.7 |
+| P50 | 63.4% | 50.0% | +13.4 |
+| P67 | 75.0% | 66.7% | +8.3 |
 | P82 | 86.1% | 81.8% | +4.3 |
-| P90 | 91.8% | 90.0% | +1.8 |
+| P90 | 91.7% | 90.0% | +1.7 |
 
 (Quantile predictions are monotonically rearranged per row, so there are
 **no quantile crossings** — this calibration gap is a separate, real property.)
@@ -25,7 +26,7 @@ converges to target for the upper ones:
 
 Weekly demand is intermittent. After reindexing to a continuous weekly grid
 (weeks with no sales = 0 demand), a large fraction of test product-weeks are
-**exactly zero** — e.g. 638 of 3,219 products (19.8%) have zero demand across
+**exactly zero** — e.g. 637 of 3,218 products (19.8%) have zero demand across
 the entire 12-week test window.
 
 Coverage is measured as `P(actual <= forecast)`. When a low quantile predicts
@@ -43,14 +44,14 @@ The models still minimize pinball loss correctly.
 ## Why we are NOT over-engineering it
 
 - The **upper quantiles that drive the decision-aware wins are well
-  calibrated** (P82 = 86.1%, P90 = 91.8%). The premium tier — the largest
+  calibrated** (P82 = 86.1%, P90 = 91.7%). The premium tier — the largest
   source of savings — orders P82.
-- The calibration gap is not uniform: it differs by quantile (+18.5 points
-  at P33 down to +1.8 at P90), so the two strategies are not affected
-  equally. Accuracy-first always orders P50 (+13.1). Decision-aware orders
+- The calibration gap is not uniform: it differs by quantile (+18.7 points
+  at P33 down to +1.7 at P90), so the two strategies are not affected
+  equally. Accuracy-first always orders P50 (+13.4). Decision-aware orders
   P33, P67 or P82 depending on tier. The quantiles that drive the decision,
   especially P82 for the premium tier, are well calibrated. Decision-aware
-  beats accuracy-first by **+12.3% (£57,232)** in realized cost.
+  beats accuracy-first by **+12.0% (£54,631)** in realized cost.
 - A "proper" fix (zero-inflated / hurdle / Tweedie models, or a separate
   intermittency model) is a larger modelling change out of scope here. It is
   noted as possible future work.
