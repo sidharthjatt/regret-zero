@@ -70,43 +70,59 @@ Two modeling decisions have their own notes: [keeping extreme demand weeks](repo
 
 ## Running it
 
-### Setup
+You need Python 3.11 or newer. The pinned versions of pandas, numpy, scipy and scikit-learn don't install on older Pythons. The numbers in this README were produced on Python 3.11.15.
+
+### 1. Get the code and install
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+git clone https://github.com/sidharthjatt/regret-zero.git
+cd regret-zero
+python3.11 -m venv venv          # any Python 3.11 or newer
+source venv/bin/activate         # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-The numbers on this page reproduce only with the exact versions pinned in `requirements.txt`. I verified them on Python 3.11.15. Other pandas or numpy versions change the LightGBM forecasts slightly, and with them the headline.
+On macOS, LightGBM also needs the OpenMP runtime, which pip can't install: `brew install libomp`.
 
-On macOS, LightGBM also needs the OpenMP runtime, which pip can't install:
+### 2. Just the dashboard
 
-```bash
-brew install libomp
-```
-
-### Data
-
-The raw data isn't in the repo. Download [Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) from the UCI Machine Learning Repository. It is one Excel file, `online_retail_II.xlsx`, with two sheets (`Year 2009-2010` and `Year 2010-2011`). The pipeline reads a single CSV, so stack the sheets first:
+The repo already contains the test-set forecasts and product prices the dashboard reads, so it runs without the raw data:
 
 ```bash
-python -c "import pandas as pd; pd.concat(pd.read_excel('online_retail_II.xlsx', sheet_name=None, dtype={'Invoice': str, 'StockCode': str}).values(), ignore_index=True).to_csv('data/online_retail_II.csv', index=False)"
-```
-
-Reading the Excel file takes a few minutes. The CSV should have 1,067,371 rows. No deduplication is applied.
-
-### Pipeline
-
-From the project root:
-
-```bash
-python src/01_data_prep.py
-python src/02_forecast.py
-python src/03_optimize.py
-python src/04_make_figures.py
 streamlit run app/app.py
 ```
+
+On its first launch Streamlit may ask for an email address. Press Enter to skip.
+
+`python src/03_optimize.py` also works at this point and prints the headline result.
+
+### 3. Reproduce everything from the raw data
+
+Download [Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) from the UCI Machine Learning Repository into `data/`, unzip it, and stack its two sheets into one CSV:
+
+```bash
+curl -L -o data/online_retail_II.zip "https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip"
+unzip -o data/online_retail_II.zip -d data/
+python -c "import pandas as pd; pd.concat(pd.read_excel('data/online_retail_II.xlsx', sheet_name=None, dtype={'Invoice': str, 'StockCode': str}).values(), ignore_index=True).to_csv('data/online_retail_II.csv', index=False)"
+```
+
+If `curl` or `unzip` isn't available (common on Windows), download and unzip the file by hand into `data/`. Reading the Excel file takes a few minutes. The CSV should have 1,067,371 rows. No deduplication is applied.
+
+Then run the pipeline from the project root, in this order:
+
+```bash
+python src/01_data_prep.py      # clean and aggregate to weekly demand
+python src/02_forecast.py       # train the five quantile models
+python src/03_optimize.py       # orders and cost comparison
+python src/04_make_figures.py   # redraw the charts in assets/
+streamlit run app/app.py
+```
+
+On my machine (an Apple M4) the four scripts take about 25 seconds in total, most of it in `02_forecast.py`.
+
+`src/02_demand_eda.py` is optional. It prints distribution statistics for the weekly demand.
+
+The run rewrites `data/prices.csv`, `data/sample.csv`, `data/product_names.csv` and `outputs/forecasts.csv`. With the pinned versions their contents come out identical, so `git diff --stat -- data outputs` should show nothing. If it shows changes, check your library versions.
 
 ## Repository layout
 
