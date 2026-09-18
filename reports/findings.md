@@ -38,11 +38,11 @@ The dataset has no cost data, so margins and holding cost are assumptions (detai
 
 Sweeping the holding cost with margins fixed:
 
-- The saving stays positive up to a holding cost of about 26% of unit price per week (+0.38% at 0.26, −0.07% at 0.27). The default is 10%.
+- The saving stays positive up to a holding cost of about 26% of unit price per week (+0.38% at 0.26, −0.07% at 0.27). The default is 10%. The curve isn't smooth on the way there: it dips to +1.0% around 0.15 before recovering, for the same snapping reason explained below.
 - It is slightly negative from 0.27 to 0.32, where the extra stock finally costs more than the stockouts it prevents.
 - It turns positive again from 0.33 (+3.4% there, +4.9% at 0.40). This isn't a bug. Each product snaps to the nearest of the five trained quantiles, so as holding cost rises, whole tiers jump to a lower quantile at once and the curve moves in steps. The dashboard sweep stops at 0.30; the points above that were computed offline with `optimizer.score`.
 
-On margins: I kept them below typical gross retail margins on purpose. Plugging in full gross margins (27% / 40% / 60%) gives £158,124 (21.2%), so the headline is the conservative end.
+On margins: I kept them below typical gross retail margins on purpose. Plugging in full gross margins (27% / 40% / 60%) raises the saving to 21.2%, partly because the low tier then orders P67 instead of P33. The pound figure isn't comparable to the headline, since higher margins also make every stockout cost more. Either way, 12.0% is the conservative end.
 
 ## How much data cleaning matters
 

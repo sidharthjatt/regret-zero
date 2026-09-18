@@ -4,6 +4,8 @@ Inventory ordering that is scored on money lost, not on forecast error. Built on
 
 Live dashboard: [regret-zero.streamlit.app](https://regret-zero.streamlit.app)
 
+Hosted on Streamlit's free tier. If the app has been idle it may take about half a minute to wake up.
+
 ![RegretZero dashboard](assets/dashboard.png)
 
 ## Why I built this
@@ -60,7 +62,7 @@ The dataset has prices but no costs, so the costs are assumptions, all set at th
 | Mid | 20% | 0.667 | P67 |
 | Premium | 45% | 0.818 | P82 |
 
-Holding cost is 10% of unit price per week for every tier. The margins sit below typical gross retail margins on purpose, because a stockout doesn't always lose the full sale. Using full gross margins (27% / 40% / 60%) makes the saving larger (£158,124 (21.2%)), so 12.0% is the conservative number.
+Holding cost is 10% of unit price per week for every tier. The margins sit below typical gross retail margins on purpose, because a stockout doesn't always lose the full sale. Using full gross margins (27% / 40% / 60%) raises the saving to 21.2%, so 12.0% is the conservative number.
 
 All money figures are in pounds sterling, the currency of the source data.
 

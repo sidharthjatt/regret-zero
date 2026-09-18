@@ -14,6 +14,7 @@ Run from the project root:
     streamlit run app/app.py
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -41,8 +42,11 @@ from optimizer import (  # noqa: E402  (import after the sys.path tweak)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FORECAST_PATH = PROJECT_ROOT / "outputs" / "forecasts.csv"
 PRICES_PATH = PROJECT_ROOT / "data" / "prices.csv"
+NAMES_PATH = PROJECT_ROOT / "data" / "product_names.csv"
 
-TIER_COLORS = {"low": "#4C72B0", "mid": "#DD8452", "premium": "#55A868"}
+# Same colors as the static charts in assets/ (src/04_make_figures.py).
+BASELINE_COLOR = "#8C8C8C"   # accuracy-first: order P50
+DECISION_COLOR = "#2F6B9A"   # decision-aware: order the critical-ratio quantile
 
 
 # --------------------------------------------------------------------------
@@ -60,6 +64,23 @@ def load_forecasts() -> pd.DataFrame:
 def load_prices() -> pd.DataFrame:
     """Per-product unit price (cost basis)."""
     return pd.read_csv(PRICES_PATH, dtype={"stock_code": "string"})
+
+
+def title_case(name: str) -> str:
+    """'WHITE HANGING HEART T-LIGHT HOLDER' -> 'White Hanging Heart T-Light Holder'.
+    Capitalizes after spaces and hyphens but not after apostrophes, so "50'S"
+    becomes "50's" rather than str.title()'s "50'S"."""
+    return re.sub(r"(?<![A-Za-z'])[a-z]", lambda m: m.group(0).upper(), name.lower())
+
+
+@st.cache_data
+def load_names() -> dict:
+    """stock_code -> display name. Falls back to an empty map (codes shown
+    instead) if data/product_names.csv hasn't been generated."""
+    if not NAMES_PATH.exists():
+        return {}
+    names = pd.read_csv(NAMES_PATH, dtype={"stock_code": "string", "name": "string"})
+    return {c: title_case(n) for c, n in zip(names["stock_code"], names["name"])}
 
 
 def compute(forecasts: pd.DataFrame, prices: pd.DataFrame,
@@ -110,6 +131,7 @@ st.markdown(
 
 forecasts = load_forecasts()
 prices = load_prices()
+names = load_names()
 
 # ---- Sidebar controls ----------------------------------------------------
 st.sidebar.header("Cost assumptions")
@@ -157,26 +179,27 @@ left, right = st.columns(2)
 
 with left:
     st.subheader("Savings by tier")
+    tier_names = [t.capitalize() for t in by_tier.index]
     fig = go.Figure(
         go.Bar(
-            x=by_tier.index,
+            x=tier_names,
             y=by_tier["savings"],
-            marker_color=[TIER_COLORS[t] for t in by_tier.index],
+            marker_color=DECISION_COLOR,
             text=[f"£{v:,.0f}" for v in by_tier["savings"]],
             textposition="outside",
         )
     )
-    fig.update_layout(yaxis_title="savings (£)", xaxis_title="tier", height=380)
+    fig.update_layout(yaxis_title="Savings (£)", xaxis_title="Tier", height=380)
     st.plotly_chart(fig, width="stretch")
 
 with right:
     st.subheader("Cost by strategy, per tier")
     fig2 = go.Figure()
-    fig2.add_bar(name="accuracy-first", x=by_tier.index, y=by_tier["cost_accuracy"],
-                 marker_color="#B0B0B0")
-    fig2.add_bar(name="decision-aware", x=by_tier.index, y=by_tier["cost_decision"],
-                 marker_color="#2C7FB8")
-    fig2.update_layout(barmode="group", yaxis_title="cost (£)", xaxis_title="tier",
+    fig2.add_bar(name="Accuracy-first", x=tier_names, y=by_tier["cost_accuracy"],
+                 marker_color=BASELINE_COLOR)
+    fig2.add_bar(name="Decision-aware", x=tier_names, y=by_tier["cost_decision"],
+                 marker_color=DECISION_COLOR)
+    fig2.update_layout(barmode="group", yaxis_title="Cost (£)", xaxis_title="Tier",
                        height=380, legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig2, width="stretch")
 
@@ -187,7 +210,6 @@ top = (
     .agg(
         tier=("tier", "first"),
         unit_price=("unit_price", "first"),
-        cr=("cr", "first"),
         chosen_q=("chosen_q", "first"),
         cost_accuracy=("cost_accuracy", "sum"),
         cost_decision=("cost_decision", "sum"),
@@ -196,12 +218,23 @@ top = (
 )
 top["savings"] = top["cost_accuracy"] - top["cost_decision"]
 top = top.sort_values("savings", ascending=False).head(10)
+top_table = pd.DataFrame({
+    "Product": [names.get(c, c) for c in top["stock_code"]],
+    "Code": top["stock_code"].to_numpy(),
+    "Tier": top["tier"].str.capitalize().to_numpy(),
+    "Price (£)": top["unit_price"].to_numpy(),
+    "Orders": [f"P{round(q * 100)}" for q in top["chosen_q"]],
+    "Cost at P50 (£)": top["cost_accuracy"].to_numpy(),
+    "Cost at CR quantile (£)": top["cost_decision"].to_numpy(),
+    "Saving (£)": top["savings"].to_numpy(),
+})
 st.dataframe(
-    top.style.format({
-        "unit_price": "{:.2f}", "cr": "{:.3f}", "chosen_q": "{:.3f}",
-        "cost_accuracy": "£{:,.0f}", "cost_decision": "£{:,.0f}", "savings": "£{:,.0f}",
+    top_table.style.format({
+        "Price (£)": "{:.2f}", "Cost at P50 (£)": "{:,.0f}",
+        "Cost at CR quantile (£)": "{:,.0f}", "Saving (£)": "{:,.0f}",
     }),
     width="stretch",
+    hide_index=True,
 )
 
 # ==========================================================================
@@ -216,42 +249,61 @@ sweep = sweep_holding(tuple(margins[t] for t in TIER_LABELS))
 fig3 = go.Figure()
 fig3.add_trace(go.Scatter(
     x=sweep["holding"], y=sweep["savings"], mode="lines",
-    line=dict(color="#2C7FB8", width=2), name="savings",
+    line=dict(color=DECISION_COLOR, width=2), name="Savings",
 ))
 # Zero line: anything above it means decision-aware still wins.
-fig3.add_hline(y=0, line_dash="dot", line_color="#999999")
+fig3.add_hline(y=0, line_color=BASELINE_COLOR)
 # Mark the current slider value and its savings.
-fig3.add_vline(x=holding, line_dash="dash", line_color="#DD8452",
+fig3.add_vline(x=holding, line_dash="dash", line_color=BASELINE_COLOR,
                annotation_text=f"current: {holding:.2f}", annotation_position="top")
 fig3.add_trace(go.Scatter(
     x=[holding], y=[savings], mode="markers",
-    marker=dict(color="#DD8452", size=11), name="current setting",
+    marker=dict(color=DECISION_COLOR, size=11), name="Current setting",
 ))
-fig3.update_layout(xaxis_title="holding fraction (Co)", yaxis_title="total savings (£)",
+fig3.update_layout(xaxis_title="Holding fraction", yaxis_title="Total savings (£)",
                    height=380, legend=dict(orientation="h", y=1.1))
 st.plotly_chart(fig3, width="stretch")
 
-# Describe the curve honestly and dynamically: state exactly where it stays
-# positive, computed from the swept data so the claim always matches the chart
-# (the crossing point moves as the tier-margin sliders change).
-_neg = sweep[sweep["savings"] <= 0]
-if _neg.empty:
-    sens_msg = (
-        "At the current tier margins, decision-aware savings stay positive across "
-        "the **entire swept holding range (0.02–0.30)**, so the result isn't a "
-        "single lucky setting."
+# Describe the curve from the swept data, so the text always matches the chart:
+# where the current setting lands, and where the saving first stops being
+# positive (the breakeven moves as the tier-margin sliders change).
+if savings > 0:
+    current_msg = (
+        f"At a holding fraction of {holding:.2f}, ordering the critical-ratio "
+        f"quantile saves £{savings:,.0f} ({savings_pct:.1f}%) against ordering P50."
     )
 else:
-    _first_neg = _neg["holding"].min()
-    sens_msg = (
-        "At the current tier margins, decision-aware savings stay positive for "
-        f"holding fractions **below about {_first_neg:.2f}**, turning slightly "
-        f"negative only at higher holding costs (≥ {_first_neg:.2f}, where "
-        "over-stocking finally outweighs the avoided stockouts). The current "
-        "setting sits well inside the positive zone, so the result holds across a "
-        "wide range, not a single lucky point."
+    current_msg = (
+        f"At a holding fraction of {holding:.2f}, ordering the critical-ratio "
+        f"quantile costs £{-savings:,.0f} more than ordering P50 ({savings_pct:.1f}%)."
     )
-st.markdown(sens_msg)
+
+h_lo, h_hi = HOLDING_SWEEP[0], HOLDING_SWEEP[-1]
+nonpos = sweep.index[sweep["savings"] <= 0]
+if nonpos.empty:
+    breakeven_msg = (
+        f"At these margins the saving stays positive across the whole range "
+        f"shown ({h_lo:.2f} to {h_hi:.2f}), so there is no breakeven in it."
+    )
+elif nonpos[0] == 0:
+    breakeven_msg = (
+        f"At these margins the saving is already negative at {h_lo:.2f}, the "
+        "lowest holding fraction shown."
+    )
+else:
+    below = sweep.loc[nonpos[0] - 1, "holding"]
+    above = sweep.loc[nonpos[0], "holding"]
+    breakeven_msg = (
+        f"At these margins the breakeven lies between {below:.2f} and {above:.2f}: "
+        f"the saving is positive at {below:.2f} and first turns negative at {above:.2f}."
+    )
+    recovered = sweep.loc[nonpos[0]:][sweep.loc[nonpos[0]:, "savings"] > 0]
+    if not recovered.empty:
+        breakeven_msg += (
+            f" It turns positive again at {recovered['holding'].iloc[0]:.2f}, "
+            "because each tier snaps to the nearest trained quantile."
+        )
+st.markdown(f"{current_msg} {breakeven_msg}")
 
 # ==========================================================================
 # Per-product drill-down — how the engine reasons about one product
@@ -268,7 +320,8 @@ per_prod = (
 )
 
 with st.expander("Inspect a single product", expanded=False):
-    sel = st.selectbox("Stock code (sorted by savings)", per_prod.index.tolist(), index=0)
+    sel = st.selectbox("Product (sorted by savings)", per_prod.index.tolist(), index=0,
+                       format_func=lambda c: f"{names.get(c, c)} ({c})")
     sub = m[m["stock_code"] == sel].sort_values("week_start_date")
     r = sub.iloc[0]  # product-level fields are constant across the product's weeks
 
@@ -298,7 +351,7 @@ with st.expander("Inspect a single product", expanded=False):
     fig4.add_trace(go.Scatter(x=sub["week_start_date"], y=sub["actual"],
                               mode="lines+markers", line=dict(color="#e6550d", width=2.5),
                               marker=dict(size=6), name="actual"))
-    fig4.update_layout(xaxis_title="week", yaxis_title="weekly demand (units)",
+    fig4.update_layout(xaxis_title="Week", yaxis_title="Weekly demand (units)",
                        height=400, legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig4, width="stretch")
 
@@ -322,6 +375,6 @@ with st.expander("Inspect a single product", expanded=False):
 # --------------------------------------------------------------------------
 st.divider()
 st.caption(
-    "Math mirrors src/03_optimize.py exactly; only the cost assumptions are "
-    "slider-driven. Defaults reproduce the pipeline's +12.0% result."
+    "The math comes from src/optimizer.py, the same module the batch pipeline "
+    "uses. Default sliders reproduce the pipeline's 12.0% result."
 )

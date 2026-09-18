@@ -22,7 +22,7 @@ The weekly-demand distribution is extremely right-skewed:
 
 Weekly demand per product-week on a log scale, with the median marked.
 
-(See `outputs/weekly_demand_distribution.png` and `src/02_demand_eda.py`.)
+(See `assets/demand_distribution.png` and `src/02_demand_eda.py`.)
 
 A 1.5×IQR rule flags ~11.8% of rows as "outliers," but that is the IQR rule
 misfiring on a skewed, heavy-tailed distribution, not 11.8% of rows being

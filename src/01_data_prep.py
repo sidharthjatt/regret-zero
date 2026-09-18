@@ -9,6 +9,7 @@ Output: data/demand.csv             (stock_code, week_start_date, demand)
         data/sample.csv             (first ~1000 rows, git-tracked sample)
         data/prices.csv             (stock_code, unit_price — cost basis for
                                       the optimizer; lets 03 avoid the raw file)
+        data/product_names.csv      (stock_code, name — for the dashboard)
 
 Run from the project root:
     python src/01_data_prep.py
@@ -27,6 +28,7 @@ RAW_PATH = PROJECT_ROOT / "data" / "online_retail_II.csv"
 DEMAND_PATH = PROJECT_ROOT / "data" / "demand.csv"
 SAMPLE_PATH = PROJECT_ROOT / "data" / "sample.csv"
 PRICES_PATH = PROJECT_ROOT / "data" / "prices.csv"
+NAMES_PATH = PROJECT_ROOT / "data" / "product_names.csv"
 
 # Minimum number of distinct weeks a product must appear in to be kept.
 # Below this, a demand series is too short for meaningful forecasting.
@@ -64,20 +66,21 @@ SAMPLE_ROWS = 1000
 def load_raw(path: Path) -> pd.DataFrame:
     """Load the raw transaction log efficiently.
 
-    We read only the 6 columns we actually need (skipping Description /
-    Country), and declare dtypes up front so pandas doesn't have to guess.
-    StockCode and Invoice are kept as strings: StockCode is alphanumeric
-    (e.g. '79323P') and the leading 'C' on Invoice marks cancellations,
-    which we filter on later. Customer ID is only used to pair orders with
-    their cancellations.
+    We read only the 7 columns we actually need (skipping Country), and
+    declare dtypes up front so pandas doesn't have to guess. StockCode and
+    Invoice are kept as strings: StockCode is alphanumeric (e.g. '79323P')
+    and the leading 'C' on Invoice marks cancellations, which we filter on
+    later. Customer ID is only used to pair orders with their cancellations,
+    and Description only to name products for the dashboard.
     """
     df = pd.read_csv(
         path,
-        usecols=["Invoice", "StockCode", "Quantity", "InvoiceDate", "Price",
-                 "Customer ID"],
+        usecols=["Invoice", "StockCode", "Description", "Quantity", "InvoiceDate",
+                 "Price", "Customer ID"],
         dtype={
             "Invoice": "string",
             "StockCode": "string",
+            "Description": "string",
             "Quantity": "int64",
             "Price": "float64",
         },
@@ -259,6 +262,22 @@ def main() -> None:
     )
     prices.to_csv(PRICES_PATH, index=False)
     print(f"Wrote {PRICES_PATH.relative_to(PROJECT_ROOT)} ({len(prices):,} products)")
+
+    # Display name per product: its most frequent Description among the
+    # cleaned sales rows (ties broken alphabetically), whitespace normalized.
+    desc = df.loc[df["StockCode"].isin(kept_codes), ["StockCode", "Description"]].dropna()
+    desc["Description"] = desc["Description"].str.split().str.join(" ")
+    names = (
+        desc.value_counts()
+        .rename("n")
+        .reset_index()
+        .sort_values(["StockCode", "n", "Description"], ascending=[True, False, True])
+        .drop_duplicates("StockCode")
+        .rename(columns={"StockCode": "stock_code", "Description": "name"})
+        [["stock_code", "name"]]
+    )
+    names.to_csv(NAMES_PATH, index=False)
+    print(f"Wrote {NAMES_PATH.relative_to(PROJECT_ROOT)} ({len(names):,} products)")
 
     summarize(weekly)
 
