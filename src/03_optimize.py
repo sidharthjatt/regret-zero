@@ -206,7 +206,7 @@ def main() -> None:
     print(f"decision_aware (order CR-qtl): £ {total_dec:14,.0f}")
     print(f"savings:                       £ {savings:14,.0f}  ({savings_pct:.1f}%)")
 
-    print("\n--- Accuracy metric (RMSE) (note: best forecast != best decision) ---")
+    print("\n--- Accuracy metric (RMSE). Note: best forecast != best decision ---")
     print(f"accuracy_first RMSE: {rmse_acc:.3f}")
     print(f"decision_aware RMSE: {rmse_dec:.3f}")
     if rmse_dec >= rmse_acc and savings > 0:

@@ -16,14 +16,14 @@ data/*.csv
 data/*.xlsx
 # ...but allow a small committed sample
 !data/sample.csv
-# ...and prices.csv (76 KB) — needed by the deployed Streamlit dashboard
+# ...and prices.csv (76 KB): needed by the deployed Streamlit dashboard
 !data/prices.csv
-# ...and product_names.csv — display names for the dashboard's tables
+# ...and product_names.csv: display names for the dashboard's tables
 !data/product_names.csv
 
 # --- Generated outputs (regenerable artifacts: plots, forecast CSVs) ---
 outputs/*
-# ...except forecasts.csv (4 MB) — needed by the deployed Streamlit dashboard
+# ...except forecasts.csv (4 MB): needed by the deployed Streamlit dashboard
 !outputs/forecasts.csv
 
-# NOTE: reports/ holds hand-written decision notes — track them (do NOT ignore).
+# NOTE: reports/ holds hand-written decision notes (track them, do NOT ignore).
