@@ -3,7 +3,7 @@
 
 This is the core of RegretZero: it turns the quantile demand forecasts from
 02_forecast.py into ordering decisions, and proves that a DECISION-AWARE order
-beats an ACCURACY-FIRST order in rupee terms — i.e. the best forecast is not
+beats an ACCURACY-FIRST order in pound (£) terms — i.e. the best forecast is not
 necessarily the best decision.
 
 THE NEWSVENDOR LOGIC
@@ -44,7 +44,8 @@ approximates the newsvendor optimum F^{-1}(CR). The forecaster trains
 P33/P67/P82 to match the three tier CRs, so low->P33, mid->P67, premium->P82.
 All thresholds and fractions are top-of-file and easy to change.
 
-Input : outputs/forecasts.csv     (stock_code, week_start_date, actual, p50, p90)
+Input : outputs/forecasts.csv     (stock_code, week_start_date, actual,
+                                   p33, p50, p67, p82, p90)
         data/prices.csv           (stock_code, unit_price — from 01_data_prep)
 Output: outputs/regret_by_product.csv
 
@@ -200,10 +201,10 @@ def main() -> None:
     print("products by ordered quantile: " + ", ".join(
         f"P{round(q*100)}={n:,}" for q, n in q_counts.items()))
 
-    print("\n--- Decision-regret comparison (test set, total rupee cost) ---")
-    print(f"accuracy_first (order P50):    Rs {total_acc:14,.0f}")
-    print(f"decision_aware (order CR-qtl): Rs {total_dec:14,.0f}")
-    print(f"savings:                       Rs {savings:14,.0f}  ({savings_pct:.1f}%)")
+    print("\n--- Decision-regret comparison (test set, total £ cost) ---")
+    print(f"accuracy_first (order P50):    £ {total_acc:14,.0f}")
+    print(f"decision_aware (order CR-qtl): £ {total_dec:14,.0f}")
+    print(f"savings:                       £ {savings:14,.0f}  ({savings_pct:.1f}%)")
 
     print("\n--- Accuracy metric (RMSE) — note: best forecast != best decision ---")
     print(f"accuracy_first RMSE: {rmse_acc:.3f}")

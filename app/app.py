@@ -77,7 +77,7 @@ HOLDING_SWEEP = [round(x, 2) for x in np.arange(0.02, 0.301, 0.01)]
 
 @st.cache_data
 def sweep_holding(margins_tuple: tuple) -> pd.DataFrame:
-    """Total savings (₹ and %) across the holding-fraction grid, with the given
+    """Total savings (£ and %) across the holding-fraction grid, with the given
     tier margins held fixed. Reuses compute() exactly — no separate math.
 
     Cached on the margins tuple, so moving the *holding* slider (which doesn't
@@ -105,7 +105,7 @@ st.title("RegretZero — decision cockpit")
 st.markdown(
     "**Thesis:** the best forecast is not the best decision. Ordering at the "
     "newsvendor critical-ratio quantile (*decision-aware*) beats ordering the "
-    "median point forecast (*accuracy-first*) in rupee terms."
+    "median point forecast (*accuracy-first*) in pound (£) terms."
 )
 
 forecasts = load_forecasts()
@@ -117,7 +117,7 @@ st.sidebar.caption("Cu = margin × price (stockout)  ·  Co = holding × price (
 
 # Slider defaults come straight from the shared cost model's canonical values
 # (optimizer.HOLDING_FRACTION and MARGIN_BY_TIER), so the dashboard's default
-# load always matches the pipeline (+12.3%, Rs 57,232).
+# load always matches the pipeline (+12.3%, £57,232).
 holding = st.sidebar.slider("Holding fraction (Co)", 0.02, 0.30, HOLDING_FRACTION, 0.01)
 
 st.sidebar.subheader("Tier margins (Cu)")
@@ -142,9 +142,9 @@ savings_pct = 100 * savings / total_acc if total_acc else 0.0
 
 # ---- Headline metrics ----------------------------------------------------
 c1, c2, c3 = st.columns(3)
-c1.metric("Accuracy-first cost", f"₹{total_acc:,.0f}")
-c2.metric("Decision-aware cost", f"₹{total_dec:,.0f}")
-c3.metric("Savings", f"₹{savings:,.0f}", delta=f"{savings_pct:.1f}%")
+c1.metric("Accuracy-first cost", f"£{total_acc:,.0f}")
+c2.metric("Decision-aware cost", f"£{total_dec:,.0f}")
+c3.metric("Savings", f"£{savings:,.0f}", delta=f"{savings_pct:.1f}%")
 
 # ---- Per-tier aggregation ------------------------------------------------
 by_tier = (
@@ -162,11 +162,11 @@ with left:
             x=by_tier.index,
             y=by_tier["savings"],
             marker_color=[TIER_COLORS[t] for t in by_tier.index],
-            text=[f"₹{v:,.0f}" for v in by_tier["savings"]],
+            text=[f"£{v:,.0f}" for v in by_tier["savings"]],
             textposition="outside",
         )
     )
-    fig.update_layout(yaxis_title="savings (₹)", xaxis_title="tier", height=380)
+    fig.update_layout(yaxis_title="savings (£)", xaxis_title="tier", height=380)
     st.plotly_chart(fig, width="stretch")
 
 with right:
@@ -176,7 +176,7 @@ with right:
                  marker_color="#B0B0B0")
     fig2.add_bar(name="decision-aware", x=by_tier.index, y=by_tier["cost_decision"],
                  marker_color="#2C7FB8")
-    fig2.update_layout(barmode="group", yaxis_title="cost (₹)", xaxis_title="tier",
+    fig2.update_layout(barmode="group", yaxis_title="cost (£)", xaxis_title="tier",
                        height=380, legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig2, width="stretch")
 
@@ -199,7 +199,7 @@ top = top.sort_values("savings", ascending=False).head(10)
 st.dataframe(
     top.style.format({
         "unit_price": "{:.2f}", "cr": "{:.3f}", "chosen_q": "{:.3f}",
-        "cost_accuracy": "₹{:,.0f}", "cost_decision": "₹{:,.0f}", "savings": "₹{:,.0f}",
+        "cost_accuracy": "£{:,.0f}", "cost_decision": "£{:,.0f}", "savings": "£{:,.0f}",
     }),
     width="stretch",
 )
@@ -227,7 +227,7 @@ fig3.add_trace(go.Scatter(
     x=[holding], y=[savings], mode="markers",
     marker=dict(color="#DD8452", size=11), name="current setting",
 ))
-fig3.update_layout(xaxis_title="holding fraction (Co)", yaxis_title="total savings (₹)",
+fig3.update_layout(xaxis_title="holding fraction (Co)", yaxis_title="total savings (£)",
                    height=380, legend=dict(orientation="h", y=1.1))
 st.plotly_chart(fig3, width="stretch")
 
@@ -274,7 +274,7 @@ with st.expander("Inspect a single product", expanded=False):
 
     # Product economics.
     econ_cols = st.columns(4)
-    econ_cols[0].metric("Unit price", f"₹{r['unit_price']:.2f}")
+    econ_cols[0].metric("Unit price", f"£{r['unit_price']:.2f}")
     econ_cols[1].metric("Tier", r["tier"])
     econ_cols[2].metric("Critical ratio", f"{r['cr']:.3f}")
     econ_cols[3].metric("Orders quantile", f"P{round(r['chosen_q']*100)}")
@@ -282,9 +282,9 @@ with st.expander("Inspect a single product", expanded=False):
     # Cost under each strategy, summed over this product's test weeks.
     ca, cd = sub["cost_accuracy"].sum(), sub["cost_decision"].sum()
     cost_cols = st.columns(3)
-    cost_cols[0].metric("Accuracy-first cost", f"₹{ca:,.0f}")
-    cost_cols[1].metric("Decision-aware cost", f"₹{cd:,.0f}")
-    cost_cols[2].metric("Savings", f"₹{ca - cd:,.0f}",
+    cost_cols[0].metric("Accuracy-first cost", f"£{ca:,.0f}")
+    cost_cols[1].metric("Decision-aware cost", f"£{cd:,.0f}")
+    cost_cols[2].metric("Savings", f"£{ca - cd:,.0f}",
                         delta=f"{(100 * (ca - cd) / ca) if ca else 0:.1f}%")
 
     # Actual demand vs the five quantile forecasts over the test weeks.
@@ -308,7 +308,7 @@ with st.expander("Inspect a single product", expanded=False):
     wk["week_start_date"] = wk["week_start_date"].dt.date
     st.dataframe(
         wk.style.format({"accuracy_order": "{:.0f}", "decision_order": "{:.0f}",
-                         "cost_accuracy": "₹{:,.2f}", "cost_decision": "₹{:,.2f}"}),
+                         "cost_accuracy": "£{:,.2f}", "cost_decision": "£{:,.2f}"}),
         width="stretch",
     )
 

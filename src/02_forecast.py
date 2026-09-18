@@ -2,9 +2,9 @@
 02_forecast.py — RegretZero forecasting layer
 
 Trains LightGBM quantile-regression models on data/demand.csv to forecast
-weekly demand per product at multiple quantiles (P50, P90). Quantile models
-(pinball loss) are used instead of a Gaussian point forecast because weekly
-demand is extremely right-skewed and heavy-tailed; see
+weekly demand per product at five quantiles (P33, P50, P67, P82, P90).
+Quantile models (pinball loss) are used instead of a Gaussian point forecast
+because weekly demand is extremely right-skewed and heavy-tailed; see
 reports/01_outlier_decision.md. Extreme weeks are kept, not winsorized.
 
 LEAKAGE IS THE PRIMARY CONCERN. This is time-series data, so:
@@ -15,7 +15,8 @@ LEAKAGE IS THE PRIMARY CONCERN. This is time-series data, so:
   * no global statistic (scaler / target encoding) is fit on the full data.
 
 Input : data/demand.csv            (stock_code, week_start_date, demand)
-Output: outputs/forecasts.csv      (stock_code, week_start_date, actual, p50, p90)
+Output: outputs/forecasts.csv      (stock_code, week_start_date, actual,
+                                    p33, p50, p67, p82, p90)
 
 Run from the project root:
     python src/02_forecast.py

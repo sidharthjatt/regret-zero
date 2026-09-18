@@ -45,9 +45,12 @@ The models still minimize pinball loss correctly.
 - The **upper quantiles that drive the decision-aware wins are well
   calibrated** (P82 = 86.1%, P90 = 91.8%). The premium tier — the largest
   source of savings — orders P82.
-- The calibration gap affects both strategies' inputs identically, so the
-  **decision comparison is unbiased**: decision-aware still beats
-  accuracy-first by **+12.3% (₹57,232)** in realized cost.
+- The calibration gap is not uniform: it differs by quantile (+18.5 points
+  at P33 down to +1.8 at P90), so the two strategies are not affected
+  equally. Accuracy-first always orders P50 (+13.1). Decision-aware orders
+  P33, P67 or P82 depending on tier. The quantiles that drive the decision,
+  especially P82 for the premium tier, are well calibrated. Decision-aware
+  beats accuracy-first by **+12.3% (£57,232)** in realized cost.
 - A "proper" fix (zero-inflated / hurdle / Tweedie models, or a separate
   intermittency model) is a larger modelling change out of scope here. It is
   noted as possible future work.

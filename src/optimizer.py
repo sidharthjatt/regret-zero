@@ -43,7 +43,7 @@ three auditable reasons:
     mid      general merchandise            0.20    0.667    P67
     premium  specialty / gift / luxury      0.45    0.818    P82
 
-These defaults reproduce the proven result: total savings +12.3% (Rs 57,232).
+These defaults reproduce the proven result: total savings +12.3% (£57,232).
 """
 
 import numpy as np
