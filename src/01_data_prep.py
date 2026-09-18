@@ -43,6 +43,20 @@ NON_PRODUCT_CODES = {
     "POST", "DOT", "M", "BANK CHARGES", "ADJUST", "D", "CARRIAGE",
 }
 
+# Drop orders that were later cancelled in full? A positive line is paired with
+# a cancellation ('C' invoice) for the same Customer ID, StockCode and absolute
+# Quantity, timestamped after it. Pairing is one-to-one: each cancellation takes
+# the most recent earlier unmatched order. Both rows of a pair are dropped
+# (subject to MAX_CANCEL_LAG_HOURS below), so e.g. the 74,215-unit order 541431
+# (cancelled 16 min later by C541433) no longer counts as demand. Rows without
+# a Customer ID are never paired.
+REMOVE_MATCHED_CANCELLATIONS = True
+
+# Only drop a matched pair if the cancellation came within this many hours of
+# the order. Quick reversals look like entry errors; most later ones look like
+# returns of goods that did ship. None = drop every matched pair.
+MAX_CANCEL_LAG_HOURS = 24
+
 # Number of rows to write to the small, git-tracked sample file.
 SAMPLE_ROWS = 1000
 
@@ -50,15 +64,17 @@ SAMPLE_ROWS = 1000
 def load_raw(path: Path) -> pd.DataFrame:
     """Load the raw transaction log efficiently.
 
-    We read only the 5 columns we actually need for demand (skipping
-    Description / Customer ID / Country), and declare dtypes up front so
-    pandas doesn't have to guess. StockCode and Invoice are kept as
-    strings: StockCode is alphanumeric (e.g. '79323P') and the leading
-    'C' on Invoice marks cancellations, which we filter on later.
+    We read only the 6 columns we actually need (skipping Description /
+    Country), and declare dtypes up front so pandas doesn't have to guess.
+    StockCode and Invoice are kept as strings: StockCode is alphanumeric
+    (e.g. '79323P') and the leading 'C' on Invoice marks cancellations,
+    which we filter on later. Customer ID is only used to pair orders with
+    their cancellations.
     """
     df = pd.read_csv(
         path,
-        usecols=["Invoice", "StockCode", "Quantity", "InvoiceDate", "Price"],
+        usecols=["Invoice", "StockCode", "Quantity", "InvoiceDate", "Price",
+                 "Customer ID"],
         dtype={
             "Invoice": "string",
             "StockCode": "string",
@@ -68,6 +84,46 @@ def load_raw(path: Path) -> pd.DataFrame:
         parse_dates=["InvoiceDate"],
     )
     return df
+
+
+def matched_cancellation_pairs(df: pd.DataFrame) -> pd.DataFrame:
+    """Orders that were cancelled in full, paired with their cancellations
+    (see REMOVE_MATCHED_CANCELLATIONS). Returns one row per pair with the
+    index labels of both rows and the lag between them.
+
+    Each cancellation, in time order, is paired with the most recent earlier
+    unmatched order sharing (Customer ID, StockCode, |Quantity|). Pairing is
+    one-to-one, so a repeated identical order is only cancelled once.
+    """
+    key = ["Customer ID", "StockCode", "abs_qty"]
+    is_cancel = df["Invoice"].str.startswith("C", na=False)
+    has_customer = df["Customer ID"].notna()
+    orders = df[~is_cancel & (df["Quantity"] > 0) & has_customer]
+    cancels = df[is_cancel & (df["Quantity"] < 0) & has_customer]
+    orders = orders.assign(abs_qty=orders["Quantity"])
+    cancels = cancels.assign(abs_qty=-cancels["Quantity"])
+
+    # Candidate orders per key, oldest first: [(index label, timestamp), ...].
+    cancel_keys = pd.MultiIndex.from_frame(cancels[key])
+    orders = orders[pd.MultiIndex.from_frame(orders[key]).isin(cancel_keys)]
+    pool = {
+        k: list(zip(g.index, g["InvoiceDate"]))
+        for k, g in orders.sort_values("InvoiceDate").groupby(key)
+    }
+
+    matched = []
+    for k, g in cancels.sort_values("InvoiceDate").groupby(key):
+        candidates = pool.get(k, [])
+        for c_idx, c_time in zip(g.index, g["InvoiceDate"]):
+            # Most recent order placed strictly before this cancellation.
+            for j in range(len(candidates) - 1, -1, -1):
+                if candidates[j][1] < c_time:
+                    matched.append((candidates.pop(j)[0], c_idx))
+                    break
+    pairs = pd.DataFrame(matched, columns=["order_idx", "cancel_idx"])
+    pairs["lag"] = (df.loc[pairs["cancel_idx"], "InvoiceDate"].to_numpy()
+                    - df.loc[pairs["order_idx"], "InvoiceDate"].to_numpy())
+    return pairs
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,18 +138,31 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["StockCode", "InvoiceDate"])
     print(f"after drop missing key fields:    {len(df):>10,}  (-{n_start - len(df):,})")
 
-    # 2. Remove cancelled invoices (Invoice number starts with 'C').
+    # 2. Remove orders that were later cancelled in full, together with their
+    #    cancellations. Must run before step 3 drops the cancellation rows.
+    if REMOVE_MATCHED_CANCELLATIONS:
+        prev = len(df)
+        pairs = matched_cancellation_pairs(df)
+        n_matched = len(pairs)
+        if MAX_CANCEL_LAG_HOURS is not None:
+            pairs = pairs[pairs["lag"] <= pd.Timedelta(hours=MAX_CANCEL_LAG_HOURS)]
+        df = df.drop(pd.Index(pairs["order_idx"]).append(pd.Index(pairs["cancel_idx"])))
+        lag_note = "no lag limit" if MAX_CANCEL_LAG_HOURS is None else f"lag <= {MAX_CANCEL_LAG_HOURS}h"
+        print(f"after removing matched cancels:   {len(df):>10,}  (-{prev - len(df):,}; "
+              f"{len(pairs):,} of {n_matched:,} matched pairs, {lag_note})")
+
+    # 3. Remove cancelled invoices (Invoice number starts with 'C').
     prev = len(df)
     df = df[~df["Invoice"].str.startswith("C", na=False)]
     print(f"after removing cancellations:     {len(df):>10,}  (-{prev - len(df):,})")
 
-    # 3. Remove non-sales lines: zero/negative quantity (returns) or
+    # 4. Remove non-sales lines: zero/negative quantity (returns) or
     #    zero/negative price (free items, adjustments).
     prev = len(df)
     df = df[(df["Quantity"] > 0) & (df["Price"] > 0)]
     print(f"after removing qty<=0 / price<=0: {len(df):>10,}  (-{prev - len(df):,})")
 
-    # 4. Remove non-product StockCodes (postage, fees, adjustments).
+    # 5. Remove non-product StockCodes (postage, fees, adjustments).
     if REMOVE_NON_PRODUCT_CODES:
         prev = len(df)
         code = df["StockCode"].str.strip().str.upper()
