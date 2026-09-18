@@ -81,3 +81,5 @@ Scaled from 12 weeks to a year (×52/12), the saving is about **£237,000**, fro
 ## Summary
 
 For the same forecasts, ordering at each product's critical-ratio quantile cut the cost of ordering mistakes by 12.0% on held-out data, and the premium tier, where the theory says the gain should be largest, gained the most. The result holds across a wide range of holding costs and all three data-cleaning choices.
+
+Earlier versions of this report gave 12.3%; [CHANGELOG.md](../CHANGELOG.md) explains what changed.

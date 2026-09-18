@@ -123,6 +123,7 @@ regret-zero/
 ├── reports/                findings and modeling notes
 ├── assets/                 dashboard screenshot and charts
 ├── data/sample.csv         first 1,000 rows of data/demand.csv, for a quick look
+├── CHANGELOG.md            what changed and why
 └── requirements.txt
 ```
 
