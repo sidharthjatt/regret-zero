@@ -99,9 +99,9 @@ def sweep_holding(margins_tuple: tuple) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 # Page
 # --------------------------------------------------------------------------
-st.set_page_config(page_title="RegretZero — decision cockpit", layout="wide")
+st.set_page_config(page_title="RegretZero: decision cockpit", layout="wide")
 
-st.title("RegretZero — decision cockpit")
+st.title("RegretZero: decision cockpit")
 st.markdown(
     "**Thesis:** the best forecast is not the best decision. Ordering at the "
     "newsvendor critical-ratio quantile (*decision-aware*) beats ordering the "
@@ -238,7 +238,7 @@ _neg = sweep[sweep["savings"] <= 0]
 if _neg.empty:
     sens_msg = (
         "At the current tier margins, decision-aware savings stay positive across "
-        "the **entire swept holding range (0.02–0.30)** — the result isn't a "
+        "the **entire swept holding range (0.02–0.30)**, so the result isn't a "
         "single lucky setting."
     )
 else:
@@ -248,7 +248,7 @@ else:
         f"holding fractions **below about {_first_neg:.2f}**, turning slightly "
         f"negative only at higher holding costs (≥ {_first_neg:.2f}, where "
         "over-stocking finally outweighs the avoided stockouts). The current "
-        "setting sits well inside the positive zone — the result holds across a "
+        "setting sits well inside the positive zone, so the result holds across a "
         "wide range, not a single lucky point."
     )
 st.markdown(sens_msg)

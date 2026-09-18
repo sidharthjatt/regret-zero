@@ -1,9 +1,9 @@
-# Decision note — keeping extreme weekly-demand values
+# Decision note: keeping extreme weekly-demand values
 
 **Date:** 2026-06-27
 **Status:** Decided (pending mentor review)
 **Scope:** `data/demand.csv` (product × week demand, 183,459 rows, 3,218 products)
-**Updated:** 2026-09-18 — statistics refreshed after the cancellation fix (see Follow-up)
+**Updated:** 2026-09-18. Statistics refreshed after the cancellation fix (see Follow-up).
 
 ## Context
 
@@ -18,12 +18,16 @@ The weekly-demand distribution is extremely right-skewed:
 | p99.9 | 1,858 |
 | Max | 12,786 |
 
+![Weekly demand distribution](../assets/demand_distribution.png)
+
+Weekly demand per product-week on a log scale, with the median marked.
+
 (See `outputs/weekly_demand_distribution.png` and `src/02_demand_eda.py`.)
 
 A 1.5×IQR rule flags ~11.8% of rows as "outliers," but that is the IQR rule
-misfiring on a skewed, heavy-tailed distribution — not 11.8% of rows being
-data errors. The substantive feature is a long, genuine tail of high-volume
-weeks (likely wholesale/bulk orders).
+misfiring on a skewed, heavy-tailed distribution, not 11.8% of rows being
+data errors. The main feature is a long, real tail of high-volume weeks
+(likely wholesale/bulk orders).
 
 ## Decision
 
@@ -35,19 +39,19 @@ weeks (likely wholesale/bulk orders).
   robust to outliers by design: quantile estimates depend on the *rank* of
   observations, not their magnitude. A few enormous weeks move a target
   quantile far less than they would move a mean.
-- This is precisely the opposite of **mean-based safety stock** (mean ± k·σ),
+- This is the opposite of **mean-based safety stock** (mean ± k·σ),
   where σ = 172 on a median of 15 is dominated by the tail and would produce
   absurd stocking levels. Avoiding that fragility is the reason we chose the
   quantile approach in the first place.
 - The extreme weeks are plausibly real demand (bulk/wholesale orders).
-  Discarding them would bias high-quantile forecasts (P90/P95/P99) downward —
-  exactly the quantiles that matter most for avoiding stockouts.
+  Discarding them would bias high-quantile forecasts (P90/P95/P99) downward,
+  and those are the quantiles that matter most for avoiding stockouts.
 
-## Follow-up — resolved 2026-09-18
+## Follow-up: resolved 2026-09-18
 
 - ~~Spot-check a handful of the largest weeks to confirm they are genuine
   orders rather than data-entry artifacts. If any are clearly errors, handle
-  them as data-quality fixes — separately from this modelling decision.~~
+  them as data-quality fixes, separately from this modeling decision.~~
 
   **Resolved (2026-09-18).** The largest week, a 74,215-unit order of
   StockCode 23166 (invoice 541431), was reversed 16 minutes later by

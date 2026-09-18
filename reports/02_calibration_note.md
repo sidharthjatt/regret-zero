@@ -1,14 +1,14 @@
-# Calibration note — lower quantiles run "hot" (known, explained)
+# Calibration note: lower quantiles run "hot" (known, explained)
 
 **Date:** 2026-06-27
-**Status:** Known property, not a bug — documented, intentionally not "fixed"
+**Status:** Known property, not a bug. Documented and intentionally not "fixed".
 **Scope:** `outputs/forecasts.csv` test-set coverage (12 weeks, 3,218 products)
-**Updated:** 2026-09-18 — figures refreshed after the cancellation fix
+**Updated:** 2026-09-18. Figures refreshed after the cancellation fix.
 
 ## Observation
 
-Empirical coverage — the share of test actuals at or below each forecast
-quantile — sits **above** the nominal target for the lower quantiles, and
+Empirical coverage (the share of test actuals at or below each forecast
+quantile) sits **above** the nominal target for the lower quantiles, and
 converges to target for the upper ones:
 
 | Quantile | Empirical coverage | Target | Gap |
@@ -19,14 +19,18 @@ converges to target for the upper ones:
 | P82 | 86.1% | 81.8% | +4.3 |
 | P90 | 91.7% | 90.0% | +1.7 |
 
-(Quantile predictions are monotonically rearranged per row, so there are
-**no quantile crossings** — this calibration gap is a separate, real property.)
+![Nominal vs empirical coverage](../assets/coverage.png)
 
-## Why this happens — intermittent-demand zero mass
+Empirical coverage on the test set against each quantile's nominal level; the dashed line is perfect calibration.
+
+(Quantile predictions are monotonically rearranged per row, so there are
+**no quantile crossings**. This calibration gap is a separate, real property.)
+
+## Why this happens: zero mass from intermittent demand
 
 Weekly demand is intermittent. After reindexing to a continuous weekly grid
 (weeks with no sales = 0 demand), a large fraction of test product-weeks are
-**exactly zero** — e.g. 637 of 3,218 products (19.8%) have zero demand across
+**exactly zero**. For example, 637 of 3,218 products (19.8%) have zero demand across
 the entire 12-week test window.
 
 Coverage is measured as `P(actual <= forecast)`. When a low quantile predicts
@@ -38,14 +42,14 @@ quantiles (P82/P90), whose predictions rise above the zero mass and are
 therefore well calibrated.
 
 This is a property of discrete / intermittent demand against a continuous
-coverage definition — **not** a defect in the pinball objective or the split.
+coverage definition, **not** a defect in the pinball objective or the split.
 The models still minimize pinball loss correctly.
 
 ## Why we are NOT over-engineering it
 
 - The **upper quantiles that drive the decision-aware wins are well
-  calibrated** (P82 = 86.1%, P90 = 91.7%). The premium tier — the largest
-  source of savings — orders P82.
+  calibrated** (P82 = 86.1%, P90 = 91.7%). The premium tier, the largest
+  source of savings, orders P82.
 - The calibration gap is not uniform: it differs by quantile (+18.7 points
   at P33 down to +1.7 at P90), so the two strategies are not affected
   equally. Accuracy-first always orders P50 (+13.4). Decision-aware orders
@@ -53,7 +57,7 @@ The models still minimize pinball loss correctly.
   especially P82 for the premium tier, are well calibrated. Decision-aware
   beats accuracy-first by **+12.0% (£54,631)** in realized cost.
 - A "proper" fix (zero-inflated / hurdle / Tweedie models, or a separate
-  intermittency model) is a larger modelling change out of scope here. It is
+  intermittency model) is a larger modeling change out of scope here. It is
   noted as possible future work.
 
 ## Practical consequence

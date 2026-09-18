@@ -1,66 +1,74 @@
 # RegretZero
 
-**A decision-aware demand and inventory engine — because the best forecast is not the best decision.**
+Inventory ordering that is scored on money lost, not on forecast error. Built on two years of real transactions from a UK online giftware retailer.
 
-🔗 **Live demo:** [regret-zero.streamlit.app](https://regret-zero.streamlit.app)
+Live dashboard: [regret-zero.streamlit.app](https://regret-zero.streamlit.app)
 
-![RegretZero decision cockpit](assets/dashboard.png)
+![RegretZero dashboard](assets/dashboard.png)
 
----
+## Why I built this
 
-Most demand-forecasting projects stop at one question: *how accurately can we predict sales?* RegretZero asks a different one: *given an uncertain forecast and the real cost of being wrong, how much should we actually order?*
+Most demand-forecasting projects stop at accuracy: train a model, report RMSE or MAPE, done. A retailer doesn't act on a forecast, though. It acts on an order, and the two ways an order can be wrong don't cost the same. Running short loses the margin on every sale you couldn't make. Ordering too much leaves stock sitting on the shelf for another week. RMSE treats both mistakes as equal, so a model tuned for RMSE is tuned for the wrong target.
 
-The distinction matters. A standard model minimizes a symmetric error like RMSE, which treats over-ordering and under-ordering as equally bad. But in inventory they are not equal — a stockout forfeits a sale and maybe a customer, while overstock ties up capital and warehouse space. Optimizing for forecast accuracy quietly ignores that asymmetry. RegretZero optimizes for the decision instead.
+RegretZero keeps the forecast and changes the decision. For each product it compares what a missed sale costs with what a leftover unit costs, then orders the demand quantile that balances the two. This is the newsvendor rule from operations research. Success is measured in pounds lost on the held-out weeks.
 
-On a held-out test set of real retail transactions, ordering at the cost-optimal quantile beat ordering at the median forecast by **£54,631 — a 12.0% reduction in decision-regret** — with every product tier coming out ahead.
-
-## The idea in one line
-
-> Order at the newsvendor critical-ratio quantile of demand, not the median forecast. Measure success in the actual pounds lost from a wrong decision, not in RMSE.
+On 12 held-out weeks, ordering this way cost **£54,631 less** than ordering the median forecast, a **12.0%** reduction. All three price tiers came out ahead.
 
 ## How it works
 
-The pipeline runs in four stages, each building on the last.
+**1. Data preparation** (`src/01_data_prep.py`). The raw file has 1,067,371 transaction lines. Orders that were cancelled in full within 24 hours are dropped along with their cancellation, since they never turned into real demand. After that the script removes the remaining cancellations and returns, non-product codes (postage, bank charges, manual adjustments), and products with fewer than 20 weeks of sales. The result is 183,459 product-weeks across 3,218 products.
 
-**1. Data preparation** (`src/01_data_prep.py`) — Cleans roughly 1.07 million raw transactions from the UCI *Online Retail II* dataset down to 183,459 weekly product-demand records across 3,218 products. Orders that were reversed by a matching cancellation within 24 hours are dropped along with the cancellation (`MAX_CANCEL_LAG_HOURS`); the remaining cancellations, returns, and non-product admin codes (postage, bank charges) are removed; only products with at least 20 weeks of history are kept.
+**2. Forecasting** (`src/02_forecast.py`). LightGBM quantile regression at P33, P50, P67, P82 and P90. Weekly demand is heavily right-skewed (median 15 units, skewness about 21), so the models predict quantiles directly instead of assuming a normal distribution. Three things keep the test honest:
 
-**2. Forecasting** (`src/02_forecast.py`) — Trains LightGBM quantile-regression models at five quantiles (P33 through P90). Weekly demand is extremely right-skewed (skewness ≈ 21), so a Gaussian point forecast would misprice the tail; quantile regression is rank-based and robust to it. Leakage is prevented three ways: a zero-filled per-product panel so lag features are genuinely causal, rolling statistics shifted before the window so the current week is never inside it, and a strict chronological train/validation/test split. P90 coverage lands at 91.7% against a 90% target.
+- Every product sits on a continuous weekly calendar with empty weeks filled as zero, so "last week" always means the previous calendar week.
+- Rolling features are shifted before the window is taken, so a week never sees its own demand.
+- Train, validation and test are split strictly by date.
 
-**3. Optimization** (`src/03_optimize.py`) — Turns each forecast into an order using the newsvendor model. Each product's critical ratio — Cu / (Cu + Co) — determines which demand quantile to stock to. Products are tiered by price so the critical ratio genuinely varies (0.333 for low-margin items up to 0.818 for premium ones), and each orders its true cost-optimal quantile.
+On the test weeks, the P90 forecast covers 91.7% of actual demand against a 90% target.
 
-**4. Decision-regret benchmark** — Compares two strategies on held-out weeks: an accuracy-first baseline that orders the median forecast, and the decision-aware approach that orders the critical-ratio quantile. The realized cost is the asymmetric newsvendor cost, summed in pounds. Decision-aware wins by 12.0%.
+**3. Ordering** (`src/optimizer.py`, `src/03_optimize.py`). The critical ratio is Cu / (Cu + Co), where Cu is the margin lost per unit short and Co is the cost of one unit left over. The cost-optimal order is the demand quantile at that ratio. Products are split into three price tiers with different margins, so the ratio runs from 0.333 for cheap, thin-margin items to 0.818 for premium ones. Each product orders the nearest trained quantile.
 
-The interactive [decision cockpit](https://regret-zero.streamlit.app) puts the cost assumptions on sliders, so you can change the holding cost or the tier margins and watch the optimal orders and the savings recompute live. It also sweeps the holding cost to show the result holds across a range of settings rather than a single lucky point, and lets you drill into any single product to see how the engine reasons about it.
+**4. Scoring.** Both strategies are scored on the same held-out weeks with the same asymmetric cost. The baseline orders P50. The decision-aware strategy orders the critical-ratio quantile.
 
-## Result
+All of the ordering math lives in `src/optimizer.py`. The pipeline and the dashboard both import it, so the dashboard shows the same numbers as this page.
 
-| Strategy | Total cost (test set) |
+## Results
+
+| Strategy | Cost over 12 test weeks |
 |---|---|
-| Accuracy-first (order the median) | £456,736 |
-| Decision-aware (order the CR quantile) | £402,105 |
-| **Savings** | **£54,631 (12.0%)** |
+| Order the median forecast (P50) | £456,736 |
+| Order the critical-ratio quantile | £402,105 |
+| **Saving** | **£54,631 (12.0%)** |
 
-Every price tier comes out positive: low +7.1%, mid +7.4%, premium +14.9%.
+![Cost by price tier, both strategies](assets/tier_savings.png)
 
-A fuller writeup of the results, business impact, and limitations is in [reports/findings.md](reports/findings.md).
+By tier the saving is 7.1% (low), 7.4% (mid) and 14.9% (premium). Premium gains the most because a missed sale there costs the most, so stocking deeper pays for itself.
 
-## Repository layout
+The exact figure depends on the cost assumptions, so the dashboard puts them on sliders. The chart below sweeps the holding cost with everything else at default. The decision-aware strategy stays ahead until holding cost reaches about 26% of unit price per week. The default is 10%.
 
-```
-regret-zero/
-├── app/app.py              # Streamlit decision cockpit (deployed)
-├── src/
-│   ├── 01_data_prep.py     # clean + aggregate to weekly demand
-│   ├── 02_demand_eda.py    # distribution analysis
-│   ├── 02_forecast.py      # LightGBM quantile forecasting
-│   ├── optimizer.py        # shared newsvendor logic (single source of truth)
-│   └── 03_optimize.py      # runs the optimizer, measures decision-regret
-├── reports/                # decision notes (outliers, calibration)
-├── data/sample.csv         # first 1,000 rows of data/demand.csv, for a quick look (no script reads it)
-└── requirements.txt
-```
+![Saving as the holding cost changes](assets/holding_sweep.png)
 
-## Running it locally
+The full write-up, including a check on how data cleaning affects the result and the known limitations, is in [reports/findings.md](reports/findings.md).
+
+## About the cost numbers
+
+The dataset has prices but no costs, so the costs are assumptions, all set at the top of `src/optimizer.py`:
+
+| Tier | Margin (share of price) | Critical ratio | Orders |
+|---|---|---|---|
+| Low | 5% | 0.333 | P33 |
+| Mid | 20% | 0.667 | P67 |
+| Premium | 45% | 0.818 | P82 |
+
+Holding cost is 10% of unit price per week for every tier. The margins sit below typical gross retail margins on purpose, because a stockout doesn't always lose the full sale. Using full gross margins (27% / 40% / 60%) makes the saving larger (£158,124 (21.2%)), so 12.0% is the conservative number.
+
+All money figures are in pounds sterling, the currency of the source data.
+
+Two modeling decisions have their own notes: [keeping extreme demand weeks](reports/01_outlier_decision.md) and [why the lower quantiles over-cover](reports/02_calibration_note.md).
+
+## Running it
+
+### Setup
 
 ```bash
 python -m venv venv
@@ -68,39 +76,54 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The results in this README reproduce only with the exact versions pinned in `requirements.txt`. They were verified with Python 3.11.15. Other pandas or numpy versions produce different LightGBM forecasts, and so different headline numbers.
+The numbers on this page reproduce only with the exact versions pinned in `requirements.txt`. I verified them on Python 3.11.15. Other pandas or numpy versions change the LightGBM forecasts slightly, and with them the headline.
 
-On macOS, LightGBM needs the OpenMP runtime, which the pip wheel does not bundle. Install it once with Homebrew (it cannot come from pip):
+On macOS, LightGBM also needs the OpenMP runtime, which pip can't install:
 
 ```bash
 brew install libomp
 ```
 
-## Getting the data
+### Data
 
-The raw data is not in the repo. Download [Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) from the UCI Machine Learning Repository. It comes as one Excel file, `online_retail_II.xlsx`, with two sheets: `Year 2009-2010` and `Year 2010-2011`. The pipeline reads a single CSV, so stack both sheets into `data/online_retail_II.csv`:
+The raw data isn't in the repo. Download [Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) from the UCI Machine Learning Repository. It is one Excel file, `online_retail_II.xlsx`, with two sheets (`Year 2009-2010` and `Year 2010-2011`). The pipeline reads a single CSV, so stack the sheets first:
 
 ```bash
 python -c "import pandas as pd; pd.concat(pd.read_excel('online_retail_II.xlsx', sheet_name=None, dtype={'Invoice': str, 'StockCode': str}).values(), ignore_index=True).to_csv('data/online_retail_II.csv', index=False)"
 ```
 
-Both sheets use the same columns (`Invoice, StockCode, Description, Quantity, InvoiceDate, Price, Customer ID, Country`). Reading the Excel file takes a few minutes (`openpyxl` is already in `requirements.txt`). The CSV should come out at 1,067,371 rows. The results in this README use that plain stack of both sheets, with no deduplication.
+Reading the Excel file takes a few minutes. The CSV should have 1,067,371 rows. No deduplication is applied.
 
-## Running the pipeline
+### Pipeline
 
-Then run the pipeline from the project root:
+From the project root:
 
 ```bash
 python src/01_data_prep.py
 python src/02_forecast.py
 python src/03_optimize.py
+python src/04_make_figures.py
 streamlit run app/app.py
 ```
 
-## A note on the cost assumptions
+## Repository layout
 
-The dataset has no cost data, so the stockout and holding costs are transparent, configurable assumptions set at the top of `src/optimizer.py`. The contribution here is the framework and the relative result, not the exact pound figure — decision-aware ordering wins across a wide range of cost settings, which the live dashboard lets you verify for yourself. Two modelling decisions are written up in `reports/`: why extreme demand weeks are kept rather than capped, and why the lower quantiles are deliberately left as-is given the intermittent-demand data.
+```
+regret-zero/
+├── app/app.py              Streamlit dashboard (deployed)
+├── src/
+│   ├── 01_data_prep.py     cleaning and weekly aggregation
+│   ├── 02_demand_eda.py    demand distribution check
+│   ├── 02_forecast.py      LightGBM quantile models
+│   ├── optimizer.py        newsvendor logic shared by pipeline and dashboard
+│   ├── 03_optimize.py      orders and cost comparison
+│   └── 04_make_figures.py  charts used in this README and the reports
+├── reports/                findings and modeling notes
+├── assets/                 dashboard screenshot and charts
+├── data/sample.csv         first 1,000 rows of data/demand.csv, for a quick look
+└── requirements.txt
+```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
