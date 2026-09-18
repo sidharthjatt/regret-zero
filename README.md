@@ -106,7 +106,7 @@ unzip -o data/online_retail_II.zip -d data/
 python -c "import pandas as pd; pd.concat(pd.read_excel('data/online_retail_II.xlsx', sheet_name=None, dtype={'Invoice': str, 'StockCode': str}).values(), ignore_index=True).to_csv('data/online_retail_II.csv', index=False)"
 ```
 
-If `curl` or `unzip` isn't available (common on Windows), download and unzip the file by hand into `data/`. Reading the Excel file takes a few minutes. The CSV should have 1,067,371 rows. No deduplication is applied.
+If `curl` or `unzip` isn't available (common on Windows), download and unzip the file by hand into `data/`. Converting the Excel file took about 20 seconds on the same Apple M4; older machines will take longer. The CSV should have 1,067,371 rows. No deduplication is applied.
 
 Then run the pipeline from the project root, in this order:
 
