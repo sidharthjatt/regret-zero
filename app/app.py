@@ -1,8 +1,8 @@
 """
-app.py — RegretZero "decision cockpit" (Streamlit dashboard)
+app.py: RegretZero "decision cockpit" (Streamlit dashboard)
 
 Interactive front-end for the decision-regret result. The cost math is imported
-from src/optimizer.py — the SAME module the batch pipeline uses — so the
+from src/optimizer.py, the same module the batch pipeline uses, so the
 dashboard and the pipeline can never drift. Only the cost assumptions (holding
 fraction + per-tier margins) are driven by sliders so you can watch the savings
 move in real time.
@@ -23,7 +23,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# Import the shared cost model (src/optimizer.py) — single source of truth with
+# Import the shared cost model (src/optimizer.py), the single source of truth with
 # the batch pipeline. app/ is a different folder, so put src/ on sys.path first.
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
@@ -99,7 +99,7 @@ HOLDING_SWEEP = [round(x, 2) for x in np.arange(0.02, 0.301, 0.01)]
 @st.cache_data
 def sweep_holding(margins_tuple: tuple) -> pd.DataFrame:
     """Total savings (£ and %) across the holding-fraction grid, with the given
-    tier margins held fixed. Reuses compute() exactly — no separate math.
+    tier margins held fixed. Reuses compute() exactly, with no separate math.
 
     Cached on the margins tuple, so moving the *holding* slider (which doesn't
     change this curve) doesn't trigger a re-sweep. The cached data loaders are
@@ -238,12 +238,12 @@ st.dataframe(
 )
 
 # ==========================================================================
-# Sensitivity — savings vs holding fraction (robustness check)
+# Sensitivity: savings vs holding fraction (robustness check)
 # ==========================================================================
 st.divider()
 st.subheader("Sensitivity: savings vs holding cost")
 
-# Sweep holding across its full range at the CURRENT tier margins (cached).
+# Sweep holding across its full range at the current tier margins (cached).
 sweep = sweep_holding(tuple(margins[t] for t in TIER_LABELS))
 
 fig3 = go.Figure()
@@ -306,7 +306,7 @@ else:
 st.markdown(f"{current_msg} {breakeven_msg}")
 
 # ==========================================================================
-# Per-product drill-down — how the engine reasons about one product
+# Per-product drill-down: how the engine reasons about one product
 # ==========================================================================
 st.divider()
 st.subheader("Per-product drill-down")
@@ -356,21 +356,44 @@ with st.expander("Inspect a single product", expanded=False):
     st.plotly_chart(fig4, width="stretch")
 
     # Per-week orders + realized cost under each strategy.
-    wk = sub[["week_start_date", "actual", "accuracy_order", "decision_order",
-              "cost_accuracy", "cost_decision"]].copy()
-    wk["week_start_date"] = wk["week_start_date"].dt.date
+    wk = pd.DataFrame({
+        "Week": sub["week_start_date"].dt.date.to_numpy(),
+        "Actual": sub["actual"].to_numpy(),
+        "Order at P50": sub["accuracy_order"].to_numpy(),
+        "Order at CR quantile": sub["decision_order"].to_numpy(),
+        "Cost at P50 (£)": sub["cost_accuracy"].to_numpy(),
+        "Cost at CR quantile (£)": sub["cost_decision"].to_numpy(),
+    })
     st.dataframe(
-        wk.style.format({"accuracy_order": "{:.0f}", "decision_order": "{:.0f}",
-                         "cost_accuracy": "£{:,.2f}", "cost_decision": "£{:,.2f}"}),
+        wk.style.format({"Order at P50": "{:.0f}", "Order at CR quantile": "{:.0f}",
+                         "Cost at P50 (£)": "{:,.2f}", "Cost at CR quantile (£)": "{:,.2f}"}),
         width="stretch",
+        hide_index=True,
     )
 
-    st.caption(
-        f"P{round(r['chosen_q']*100)} is the trained quantile nearest this "
-        f"product's critical ratio ({r['cr']:.3f}); decision-aware orders it, "
-        "accuracy-first orders P50. The chart shows why ordering higher up the "
-        "demand distribution avoids costly stockouts on spiky weeks."
+    # Explain the direction of the order relative to the median, which depends
+    # on whether this product's critical ratio sits above or below 0.5.
+    q_label = f"P{round(r['chosen_q'] * 100)}"
+    basis = (
+        f"{q_label} is the trained quantile nearest this product's critical ratio "
+        f"({r['cr']:.3f}). The decision-aware strategy orders {q_label}; "
+        "accuracy-first orders P50."
     )
+    if r["chosen_q"] > 0.5:
+        reason = (
+            "A missed sale costs more than a leftover unit for this product, so "
+            "ordering above the median protects against costly stockouts in "
+            "high-demand weeks."
+        )
+    elif r["chosen_q"] < 0.5:
+        reason = (
+            "A missed sale is cheap for this product relative to holding a leftover "
+            "unit, so it orders below the median to avoid paying for stock that "
+            "doesn't sell."
+        )
+    else:
+        reason = "Both strategies order the median for this product, so their costs match."
+    st.caption(f"{basis} {reason}")
 
 # --------------------------------------------------------------------------
 st.divider()

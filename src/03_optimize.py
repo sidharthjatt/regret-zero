@@ -1,12 +1,12 @@
 """
-03_optimize.py — RegretZero inventory optimizer & decision-regret layer
+03_optimize.py: RegretZero inventory optimizer & decision-regret layer
 
 This is the core of RegretZero: it turns the quantile demand forecasts from
-02_forecast.py into ordering decisions, and proves that a DECISION-AWARE order
-beats an ACCURACY-FIRST order in pound (£) terms — i.e. the best forecast is not
+02_forecast.py into ordering decisions, and proves that a decision-aware order
+beats an accuracy-first order in pound (£) terms, i.e. the best forecast is not
 necessarily the best decision.
 
-THE NEWSVENDOR LOGIC
+The newsvendor logic
 --------------------
 Each product-week is a single-period inventory problem: we choose an order
 quantity Q before demand D is known.
@@ -18,16 +18,16 @@ they balance:
 
     P(D <= Q*) = Cu / (Cu + Co) = CR   =>   Q* = F^{-1}(CR)
 
-So the cost-optimal order is the CR-th QUANTILE of demand — exactly what our
+So the cost-optimal order is the CR-th quantile of demand, which is what our
 quantile models estimate.
 
   * accuracy_first : order = P50  (median point forecast, ignores asymmetry)
   * decision_aware : order = CR-th quantile (accounts for the cost asymmetry)
 
-PER-PRODUCT CRITICAL RATIO (price-tier margins)
+Per-product critical ratio (price-tier margins)
 -----------------------------------------------
 We have no real cost data, so costs are transparent assumptions. To make the
-critical ratio genuinely VARY across products (otherwise "CR per product" is
+critical ratio vary across products (otherwise "CR per product" is
 pointless), margin is tiered by unit price:
 
   * Products are split into price tiers (low / mid / premium) by unit-price
@@ -39,14 +39,14 @@ pointless), margin is tiered by unit price:
 
   CR = margin / (margin + HOLDING_FRACTION)
 
-Each product orders the NEAREST trained quantile to its critical ratio, so it
+Each product orders the nearest trained quantile to its critical ratio, so it
 approximates the newsvendor optimum F^{-1}(CR). The forecaster trains
 P33/P67/P82 to match the three tier CRs, so low->P33, mid->P67, premium->P82.
 All thresholds and fractions are top-of-file and easy to change.
 
 Input : outputs/forecasts.csv     (stock_code, week_start_date, actual,
                                    p33, p50, p67, p82, p90)
-        data/prices.csv           (stock_code, unit_price — from 01_data_prep)
+        data/prices.csv           (stock_code, unit_price, from 01_data_prep)
 Output: outputs/regret_by_product.csv
 
 Run from the project root:
@@ -58,7 +58,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Shared decision logic — single source of truth (src/optimizer.py). Importable
+# Shared decision logic: single source of truth (src/optimizer.py). Importable
 # here because running `python src/03_optimize.py` puts src/ on sys.path.
 from optimizer import HOLDING_FRACTION, TIER_LABELS, score
 
@@ -73,7 +73,7 @@ REGRET_PATH = PROJECT_ROOT / "outputs" / "regret_by_product.csv"
 
 # --------------------------------------------------------------------------
 # Cost model (tier margins, holding fraction, critical-ratio -> quantile,
-# asymmetric cost) lives in src/optimizer.py — the single source of truth
+# asymmetric cost) lives in src/optimizer.py, the single source of truth
 # shared with the dashboard. See that module's docstring for the full
 # benchmark justification of the cost assumptions. This file owns only the
 # I/O and the reporting; the math is imported.
@@ -110,7 +110,7 @@ def load_unit_price() -> pd.Series:
     """Load per-product unit price, preferring the small data/prices.csv.
 
     If prices.csv is missing (e.g. 01_data_prep hasn't been re-run yet), fall
-    back to computing it from the raw file ONCE and cache it to prices.csv, so
+    back to computing it from the raw file once and cache it to prices.csv, so
     subsequent runs are decoupled from the 90 MB raw data.
     """
     if PRICES_PATH.exists():

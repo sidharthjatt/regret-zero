@@ -1,16 +1,16 @@
 """
-optimizer.py — RegretZero shared decision logic (single source of truth)
+optimizer.py: RegretZero shared decision logic (single source of truth)
 
-The newsvendor cost model used by BOTH the batch pipeline (src/03_optimize.py)
-and the dashboard (app/app.py). Pure pandas/numpy — no file I/O, no Streamlit —
+The newsvendor cost model used by both the batch pipeline (src/03_optimize.py)
+and the dashboard (app/app.py). Pure pandas/numpy (no file I/O, no Streamlit),
 so the two callers produce byte-identical results from the same functions.
 
-NEWSVENDOR, IN ONE LINE
+Newsvendor, in one line
     Optimal order = F^{-1}(CR), where CR = Cu / (Cu + Co). We estimate F with
     quantile forecasts, so ordering the CR-th quantile is the cost-optimal order.
 
-COST ASSUMPTIONS (the defaults below)
-The dataset has NO cost data, so these are transparent, configurable proxies,
+Cost assumptions (the defaults below)
+The dataset has no cost data, so these are transparent, configurable proxies,
 grounded in published retail gross-margin benchmarks (2025-26) for a business
 like this one (a UK online gift retailer):
 
@@ -22,15 +22,15 @@ like this one (a UK online gift retailer):
 
 We tier products by unit price (a proxy for category) and set the underage
 (stockout) cost Cu = margin[tier] * price = the profit forgone per lost sale.
-We deliberately use CONSERVATIVE, net/contribution-margin-style fractions that
-sit BELOW the gross benchmarks above — NOT the headline gross margins — for
+We deliberately use conservative, net/contribution-margin-style fractions that
+sit below the gross benchmarks above (not the headline gross margins), for
 three auditable reasons:
-  (1) the overage cost Co also scales with price (Co = HOLDING * price), and a
-      per-week HOLDING of 10% already absorbs real markdown/obsolescence risk,
+  (1) the overage cost Co also scales with price (Co = holding * price), and a
+      per-week holding cost of 10% already absorbs real markdown/obsolescence risk,
       so Cu should reflect *contribution* lost, not gross margin;
   (2) a stockout is not always a fully lost sale (substitution / backorder),
       so gross margin overstates the true per-unit regret;
-  (3) sub-gross fractions keep the critical ratios spread ACROSS tiers
+  (3) sub-gross fractions keep the critical ratios spread across tiers
       (0.333 / 0.667 / 0.818) so the optimizer genuinely orders a different
       quantile per tier. Plugging in full gross margins (0.27/0.40/0.60) would
       compress every tier to CR>0.7 and erase the per-tier decision story.
@@ -61,10 +61,10 @@ ROUND_ORDERS = True                      # round orders to whole units
 
 
 def map_cr_to_quantile(cr: float, available=AVAILABLE_QUANTILES) -> float:
-    """Snap a critical ratio to the NEAREST trained quantile.
+    """Snap a critical ratio to the nearest trained quantile.
 
     The newsvendor optimum is F^{-1}(CR); with a finite set of trained quantiles
-    we pick the closest one. General — add more quantiles to AVAILABLE_QUANTILES
+    we pick the closest one. General: add more quantiles to AVAILABLE_QUANTILES
     (and to 02_forecast) and the match gets finer automatically.
     """
     return min(available, key=lambda q: abs(q - cr))
@@ -79,7 +79,7 @@ def build_economics(prices: pd.DataFrame,
     product). `holding` and `margins` are parameterized so the dashboard can
     drive them from sliders; the defaults reproduce the pipeline result.
 
-    Tiering is on the per-PRODUCT price distribution, so it isn't skewed by how
+    Tiering is on the per-product price distribution, so it isn't skewed by how
     many weeks each product has.
     """
     econ = prices.copy()
@@ -117,7 +117,7 @@ def attach_orders(forecasts: pd.DataFrame, econ: pd.DataFrame,
     df = forecasts.merge(econ, on="stock_code", how="left")
 
     # Defensive: any product missing a price gets median (mid-tier) economics so
-    # the model stays defined. Normally a no-op — prices.csv covers all products.
+    # the model stays defined. Normally a no-op (prices.csv covers all products).
     if int(df["unit_price"].isna().sum()):
         med = econ["unit_price"].median()
         mid = TIER_LABELS[1]

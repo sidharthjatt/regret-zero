@@ -45,17 +45,16 @@ This is a property of discrete / intermittent demand against a continuous
 coverage definition, **not** a defect in the pinball objective or the split.
 The models still minimize pinball loss correctly.
 
-## Why we are NOT over-engineering it
+## Why I am NOT over-engineering it
 
-- The **upper quantiles that drive the decision-aware wins are well
-  calibrated** (P82 = 86.1%, P90 = 91.7%). The premium tier, the largest
-  source of savings, orders P82.
 - The calibration gap is not uniform: it differs by quantile (+18.7 points
   at P33 down to +1.7 at P90), so the two strategies are not affected
   equally. Accuracy-first always orders P50 (+13.4). Decision-aware orders
-  P33, P67 or P82 depending on tier. The quantiles that drive the decision,
-  especially P82 for the premium tier, are well calibrated. Decision-aware
-  beats accuracy-first by **+12.0% (£54,631)** in realized cost.
+  P33, P67 or P82 depending on tier. The **upper quantiles that drive the
+  decision-aware wins are well calibrated** (P82 = 86.1%, P90 = 91.7%), and
+  the premium tier, the largest source of savings, orders P82.
+  Decision-aware beats accuracy-first by **+12.0% (£54,631)** in realized
+  cost.
 - A "proper" fix (zero-inflated / hurdle / Tweedie models, or a separate
   intermittency model) is a larger modeling change out of scope here. It is
   noted as possible future work.

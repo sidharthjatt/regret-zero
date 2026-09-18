@@ -1,5 +1,5 @@
 """
-02_demand_eda.py — quick distribution check on weekly demand
+02_demand_eda.py: quick distribution check on weekly demand
 
 Reads the cleaned product x week demand table and reports the shape of the
 weekly-demand distribution (median, skew, outliers) plus a saved plot.

@@ -1,5 +1,5 @@
 """
-04_make_figures.py — RegretZero charts for the README and reports
+04_make_figures.py: RegretZero charts for the README and reports
 
 Draws the static charts used in README.md and reports/. All cost numbers come
 from optimizer.score, the same function the pipeline and the dashboard use,
@@ -41,7 +41,7 @@ DEMAND_PATH = PROJECT_ROOT / "data" / "demand.csv"
 ASSETS_DIR = PROJECT_ROOT / "assets"
 
 # --------------------------------------------------------------------------
-# Style — shared by every chart.
+# Style, shared by every chart.
 # --------------------------------------------------------------------------
 BASELINE_COLOR = "#8C8C8C"   # accuracy-first: order P50
 DECISION_COLOR = "#2F6B9A"   # decision-aware: order the critical-ratio quantile

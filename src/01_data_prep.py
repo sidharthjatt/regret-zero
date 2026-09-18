@@ -1,5 +1,5 @@
 """
-01_data_prep.py — RegretZero data preparation pipeline
+01_data_prep.py: RegretZero data preparation pipeline
 
 Turns the raw UCI "Online Retail II" transaction log into a clean
 product x week demand table suitable for forecasting.
@@ -7,9 +7,9 @@ product x week demand table suitable for forecasting.
 Input : data/online_retail_II.csv   (~1M transaction rows, ~90 MB)
 Output: data/demand.csv             (stock_code, week_start_date, demand)
         data/sample.csv             (first ~1000 rows, git-tracked sample)
-        data/prices.csv             (stock_code, unit_price — cost basis for
+        data/prices.csv             (stock_code, unit_price: cost basis for
                                       the optimizer; lets 03 avoid the raw file)
-        data/product_names.csv      (stock_code, name — for the dashboard)
+        data/product_names.csv      (stock_code, name: for the dashboard)
 
 Run from the project root:
     python src/01_data_prep.py
@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 # --------------------------------------------------------------------------
-# Paths — resolved relative to the project root (parent of this file's dir),
+# Paths, resolved relative to the project root (parent of this file's dir),
 # so the script works no matter what directory you run it from.
 # --------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -38,8 +38,8 @@ MIN_WEEKS = 20
 # not real SKUs, so forecasting their "demand" is meaningless. Flip to False
 # to keep them. Two rules are applied together:
 #   1. An explicit blocklist of known admin codes (matched case-insensitively).
-#   2. Any code with no digit at all — real product codes always have a
-#      numeric core (e.g. '85048', '79323P'); admin codes like POST/M/D do not.
+#   2. Any code with no digit at all (real product codes always have a
+#      numeric core, e.g. '85048', '79323P'; admin codes like POST/M/D do not).
 REMOVE_NON_PRODUCT_CODES = True
 NON_PRODUCT_CODES = {
     "POST", "DOT", "M", "BANK CHARGES", "ADJUST", "D", "CARRIAGE",
@@ -247,7 +247,7 @@ def main() -> None:
         f"({min(SAMPLE_ROWS, len(weekly)):,} rows, git-tracked)"
     )
 
-    # Per-product average unit price — the cost basis for the optimizer layer
+    # Per-product average unit price: the cost basis for the optimizer layer
     # (03_optimize.py). Computed from the cleaned sales rows (so it reflects
     # real selling prices) and restricted to the products that survive into
     # demand.csv. Emitting it here means 03 never has to touch the 90 MB raw.

@@ -1,5 +1,5 @@
 """
-02_forecast.py — RegretZero forecasting layer
+02_forecast.py: RegretZero forecasting layer
 
 Trains LightGBM quantile-regression models on data/demand.csv to forecast
 weekly demand per product at five quantiles (P33, P50, P67, P82, P90).
@@ -7,10 +7,10 @@ Quantile models (pinball loss) are used instead of a Gaussian point forecast
 because weekly demand is extremely right-skewed and heavy-tailed; see
 reports/01_outlier_decision.md. Extreme weeks are kept, not winsorized.
 
-LEAKAGE IS THE PRIMARY CONCERN. This is time-series data, so:
+Leakage is the primary concern. This is time-series data, so:
   * the split is strictly time-based (train = earlier weeks, test = most
     recent weeks); nothing is shuffled,
-  * every feature is a backward-looking shift computed PER product, so a row
+  * every feature is a backward-looking shift computed per product, so a row
     only ever sees its own product's past, never the present or future,
   * no global statistic (scaler / target encoding) is fit on the full data.
 
@@ -36,7 +36,7 @@ DEMAND_PATH = PROJECT_ROOT / "data" / "demand.csv"
 FORECAST_PATH = PROJECT_ROOT / "outputs" / "forecasts.csv"
 
 # --------------------------------------------------------------------------
-# Config — everything tunable lives up top.
+# Config: everything tunable lives up top.
 # --------------------------------------------------------------------------
 # Quantiles to forecast. These are chosen to match the optimizer's per-tier
 # critical ratios (P33/P67/P82) so 03_optimize can order the true F^{-1}(CR);
@@ -70,8 +70,8 @@ def build_panel(df: pd.DataFrame) -> pd.DataFrame:
 
     The canonical calendar is every Monday from the global first to the global
     last week (7-day steps from the first Monday, so all points are Mondays).
-    Each product is reindexed from ITS first observed week to the global last
-    week — never earlier, which would invent demand before the product existed.
+    Each product is reindexed from its first observed week to the global last
+    week, never earlier, which would invent demand before the product existed.
     """
     if not FILL_MISSING_WEEKS:
         return df
@@ -100,8 +100,8 @@ def add_features(panel: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     Lags use groupby().shift(k) so they cannot cross product boundaries.
     Rolling stats are computed on shift(1) first, so the window covers weeks
-    t-1 .. t-ROLL_WINDOW and NEVER includes the current week's demand — the
-    classic rolling-leakage trap.
+    t-1 .. t-ROLL_WINDOW and never includes the current week's demand (the
+    classic rolling-leakage trap).
     """
     g = panel.groupby("stock_code")["demand"]
 
@@ -116,7 +116,7 @@ def add_features(panel: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         lambda s: s.shift(1).rolling(ROLL_WINDOW, min_periods=ROLL_WINDOW).std()
     )
 
-    # Calendar / seasonality features — known ahead of time, so causal.
+    # Calendar / seasonality features: known ahead of time, so causal.
     iso = panel["week_start_date"].dt.isocalendar()
     panel["woy"] = iso["week"].astype("int32")
     panel["month"] = panel["week_start_date"].dt.month.astype("int32")
@@ -162,7 +162,7 @@ def time_split(panel: pd.DataFrame):
 
 
 def pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, q: float) -> float:
-    """Mean pinball (quantile) loss — the objective LightGBM optimizes."""
+    """Mean pinball (quantile) loss, the objective LightGBM optimizes."""
     diff = y_true - y_pred
     return float(np.mean(np.maximum(q * diff, (q - 1) * diff)))
 
@@ -249,7 +249,7 @@ def main() -> None:
             f"coverage(actual<=pred)={coverage*100:5.1f}%  (target {q*100:.1f}%)"
         )
 
-    # Quantile-crossing diagnostic across ALL adjacent pairs (should be ~0
+    # Quantile-crossing diagnostic across all adjacent pairs (should be ~0
     # after the monotonic rearrangement above).
     print("\n--- Quantile crossings (adjacent pairs) ---")
     any_cross = np.zeros(len(y_true), dtype=bool)

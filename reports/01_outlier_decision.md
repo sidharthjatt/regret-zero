@@ -7,7 +7,7 @@
 
 ## Context
 
-The weekly-demand distribution is extremely right-skewed:
+The weekly-demand distribution is extremely right-skewed (statistics from `src/02_demand_eda.py`):
 
 | Statistic | Value |
 |---|---|
@@ -20,9 +20,7 @@ The weekly-demand distribution is extremely right-skewed:
 
 ![Weekly demand distribution](../assets/demand_distribution.png)
 
-Weekly demand per product-week on a log scale, with the median marked.
-
-(See `assets/demand_distribution.png` and `src/02_demand_eda.py`.)
+Weekly demand for product-weeks with at least one sale, log scale, median marked.
 
 A 1.5×IQR rule flags ~11.8% of rows as "outliers," but that is the IQR rule
 misfiring on a skewed, heavy-tailed distribution, not 11.8% of rows being
@@ -31,7 +29,7 @@ data errors. The main feature is a long, real tail of high-volume weeks
 
 ## Decision
 
-**We do NOT cap or winsorize the extreme values.**
+**I do NOT cap or winsorize the extreme values.**
 
 ## Rationale
 
@@ -41,7 +39,7 @@ data errors. The main feature is a long, real tail of high-volume weeks
   quantile far less than they would move a mean.
 - This is the opposite of **mean-based safety stock** (mean ± k·σ),
   where σ = 172 on a median of 15 is dominated by the tail and would produce
-  absurd stocking levels. Avoiding that fragility is the reason we chose the
+  absurd stocking levels. Avoiding that fragility is the reason I chose the
   quantile approach in the first place.
 - The extreme weeks are plausibly real demand (bulk/wholesale orders).
   Discarding them would bias high-quantile forecasts (P90/P95/P99) downward,
