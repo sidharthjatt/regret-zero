@@ -198,7 +198,7 @@ def train_quantile_model(q, X_fit, y_fit, X_valid, y_valid, cat_features):
 def main() -> None:
     if not DEMAND_PATH.exists():
         raise FileNotFoundError(
-            f"{DEMAND_PATH} not found — run src/01_data_prep.py first."
+            f"{DEMAND_PATH} not found: run src/01_data_prep.py first."
         )
 
     print("Loading demand ...")

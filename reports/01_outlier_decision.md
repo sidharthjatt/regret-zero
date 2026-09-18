@@ -1,7 +1,7 @@
 # Decision note: keeping extreme weekly-demand values
 
 **Date:** 2026-06-27
-**Status:** Decided (pending mentor review)
+**Status:** Decided
 **Scope:** `data/demand.csv` (product × week demand, 183,459 rows, 3,218 products)
 **Updated:** 2026-09-18. Statistics refreshed after the cancellation fix (see Follow-up).
 

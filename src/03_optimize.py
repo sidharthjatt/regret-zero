@@ -117,7 +117,7 @@ def load_unit_price() -> pd.Series:
         s = pd.read_csv(PRICES_PATH, dtype={"stock_code": "string"})
         return s.set_index("stock_code")["unit_price"]
 
-    print("data/prices.csv not found — computing from raw once and caching ...")
+    print("data/prices.csv not found: computing from raw once and caching ...")
     price = _price_from_raw()
     price.reset_index().to_csv(PRICES_PATH, index=False)
     print(f"cached {PRICES_PATH.relative_to(PROJECT_ROOT)} ({len(price):,} products)")
@@ -127,7 +127,7 @@ def load_unit_price() -> pd.Series:
 def main() -> None:
     if not FORECAST_PATH.exists():
         raise FileNotFoundError(
-            f"{FORECAST_PATH} not found — run src/02_forecast.py first."
+            f"{FORECAST_PATH} not found: run src/02_forecast.py first."
         )
 
     print("Loading forecasts ...")
@@ -206,11 +206,11 @@ def main() -> None:
     print(f"decision_aware (order CR-qtl): £ {total_dec:14,.0f}")
     print(f"savings:                       £ {savings:14,.0f}  ({savings_pct:.1f}%)")
 
-    print("\n--- Accuracy metric (RMSE) — note: best forecast != best decision ---")
+    print("\n--- Accuracy metric (RMSE) (note: best forecast != best decision) ---")
     print(f"accuracy_first RMSE: {rmse_acc:.3f}")
     print(f"decision_aware RMSE: {rmse_dec:.3f}")
     if rmse_dec >= rmse_acc and savings > 0:
-        print("=> decision_aware has WORSE RMSE but LOWER cost — the headline result.")
+        print("=> decision_aware has WORSE RMSE but LOWER cost, the headline result.")
 
     n_better = int((by_product["savings"] > 0).sum())
     n_worse = int((by_product["savings"] < 0).sum())

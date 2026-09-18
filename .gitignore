@@ -23,7 +23,6 @@ data/*.xlsx
 
 # --- Generated outputs (regenerable artifacts: plots, forecast CSVs) ---
 outputs/*
-!outputs/.gitkeep
 # ...except forecasts.csv (4 MB) — needed by the deployed Streamlit dashboard
 !outputs/forecasts.csv
 

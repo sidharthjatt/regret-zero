@@ -76,7 +76,7 @@ def main() -> None:
     axes[1].set_ylabel("count")
     axes[1].legend()
 
-    fig.suptitle("RegretZero — weekly demand distribution", fontweight="bold")
+    fig.suptitle("RegretZero: weekly demand distribution", fontweight="bold")
     fig.tight_layout()
     fig.savefig(PLOT_PATH, dpi=120)
     print(f"\nSaved plot -> {PLOT_PATH.relative_to(PROJECT_ROOT)}")
